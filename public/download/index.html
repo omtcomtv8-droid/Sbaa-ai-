@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>SABAA AI SOLUTION — تثبيت وتنزيل التطبيق | Official Mobile App</title>
+  <meta name="description" content="تثبيت تطبيق SABAA AI SOLUTION على هاتف أندرويد وآيفون مباشرة. تشغيل كامل الشاشة، إشارات لحظية، وتحديثات تلقائية.">
+  <meta name="theme-color" content="#05070B">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Cairo', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    body {
+      background: radial-gradient(circle at 50% 10%, #0f172a 0%, #05070b 100%);
+      color: #f8fafc;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px 16px;
+      text-align: center;
+    }
+    .card {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      backdrop-filter: blur(20px);
+      border-radius: 28px;
+      padding: 36px 24px;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 40px -10px rgba(245, 158, 11, 0.2);
+    }
+    .logo-badge {
+      width: 84px;
+      height: 84px;
+      margin: 0 auto 20px auto;
+      border-radius: 22px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px -5px rgba(245, 158, 11, 0.4);
+      border: 2px solid rgba(245, 158, 11, 0.5);
+    }
+    .logo-badge img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    h1 {
+      font-size: 26px;
+      font-weight: 900;
+      color: #ffffff;
+      margin-bottom: 4px;
+    }
+    .subtitle {
+      font-size: 13px;
+      font-weight: 700;
+      color: #f59e0b;
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+    }
+    .badge-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 24px;
+    }
+    .btn-install {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 16px 24px;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: 800;
+      text-decoration: none;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.4);
+      transition: all 0.2s ease;
+      cursor: pointer;
+      border: none;
+      margin-bottom: 12px;
+    }
+    .btn-install:hover {
+      background: linear-gradient(135deg, #34d399 0%, #059669 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 15px 30px -5px rgba(16, 185, 129, 0.5);
+    }
+    .btn-secondary {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 12px 20px;
+      background: rgba(30, 41, 59, 0.8);
+      color: #cbd5e1;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      transition: all 0.2s ease;
+      cursor: pointer;
+      margin-bottom: 24px;
+    }
+    .btn-secondary:hover {
+      background: rgba(51, 65, 85, 0.9);
+      color: #ffffff;
+    }
+    .steps-box {
+      background: rgba(2, 6, 23, 0.6);
+      border: 1px solid rgba(30, 41, 59, 0.8);
+      border-radius: 16px;
+      padding: 16px;
+      text-align: right;
+      font-size: 12px;
+      color: #94a3b8;
+      margin-bottom: 20px;
+    }
+    .steps-title {
+      font-weight: 800;
+      color: #f59e0b;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+    }
+    .step-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 8px;
+      line-height: 1.5;
+    }
+    .step-item:last-child {
+      margin-bottom: 0;
+    }
+    .step-num {
+      background: rgba(245, 158, 11, 0.2);
+      color: #f59e0b;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 11px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .footer-text {
+      font-size: 11px;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo-badge">
+      <img src="/icons/icon-192x192.png" alt="SABAA AI Logo">
+    </div>
+
+    <h1>SABAA AI SOLUTION</h1>
+    <div class="subtitle">منظومة التحليل المؤسسي والتداول بالذكاء الاصطناعي</div>
+
+    <div class="badge-tag">
+      <span>●</span>
+      <span>جاهز للتثبيت الفوري على الهاتف • بدون أخطاء حزم</span>
+    </div>
+
+    <!-- Direct Production APK Download Button -->
+    <a href="/download/SABAA-AI.apk" class="btn-install" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); margin-bottom: 12px; box-shadow: 0 10px 25px -5px rgba(245, 158, 11, 0.4);" download="SABAA-AI.apk">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+      <span>تحميل ملف أندرويد المباشر (APK)</span>
+    </a>
+
+    <!-- 1-Click Install Button -->
+    <button id="pwa-install-btn" class="btn-install" onclick="triggerPwaInstall()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+      <span>تثبيت التطبيق على الهاتف فوراً</span>
+    </button>
+
+    <a href="/" class="btn-secondary">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+        <polyline points="15 3 21 3 21 9"></polyline>
+        <line x1="10" y1="14" x2="21" y2="3"></line>
+      </svg>
+      <span>فتح المنصة في المتصفح</span>
+    </a>
+
+    <!-- Easy Step Guide -->
+    <div class="steps-box">
+      <div class="steps-title">
+        <span>طريقة التثبيت المباشر:</span>
+      </div>
+      <div class="step-item">
+        <span class="step-num">1</span>
+        <div>على متصفح <strong>Google Chrome (أندرويد)</strong>: اضغط زر التثبيت الأخضر أعلاه، أو اضغط قائمة المتصفح (⋮) واختر <strong>"تثبيت التطبيق"</strong>.</div>
+      </div>
+      <div class="step-item">
+        <span class="step-num">2</span>
+        <div>على متصفح <strong>Safari (آيفون)</strong>: اضغط زر المشاركة (Share) ثم اختر <strong>"إضافة إلى الشاشة الرئيسية"</strong>.</div>
+      </div>
+      <div class="step-item">
+        <span class="step-num">3</span>
+        <div>سيظهر التطبيق كأيقونة مستقلة على هاتفك تعمل بملء الشاشة وبدون أي شريط متصفح وبأعلى سرعة.</div>
+      </div>
+    </div>
+
+    <div class="footer-text">
+      SABAA AI SOLUTION • الإصدار 1.0.0 المعتمد
+    </div>
+  </div>
+
+  <script>
+    let deferredPrompt = null;
+    const installBtn = document.getElementById('pwa-install-btn');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      if (installBtn) {
+        installBtn.style.display = 'flex';
+      }
+    });
+
+    async function triggerPwaInstall() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          installBtn.innerHTML = '<span>تم تثبيت التطبيق بنجاح!</span>';
+        }
+        deferredPrompt = null;
+      } else {
+        // If already installed or browser menu needed, redirect to main app with instruction
+        window.location.href = '/?install=true';
+      }
+    }
+
+    window.addEventListener('appinstalled', () => {
+      if (installBtn) {
+        installBtn.innerHTML = '<span>التطبيق مثبت على جهازك</span>';
+      }
+    });
+
+    // Register service worker if available
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>

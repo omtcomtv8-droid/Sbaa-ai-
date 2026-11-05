@@ -1,0 +1,30 @@
+{
+  "config": {
+    "strategyId": "auto",
+    "baseAmount": 1000,
+    "maxAmount": 1000,
+    "stopLoss": 20,
+    "takeProfit": 40,
+    "asset": "TEST_PAIR_otc",
+    "timeframe": 1800,
+    "isDemo": true,
+    "enableMartingale": false,
+    "martingaleMultiplier": 2,
+    "maxMartingaleDepth": 2,
+    "tradesBeforeRest": 10,
+    "restMinMinutes": 15,
+    "restMaxMinutes": 45,
+    "maxConcurrentTrades": 1,
+    "cooldownBetweenTradesSec": 30,
+    "minSignalStrength": 75
+  },
+  "isRunning": false,
+  "isEmergencyStopped": false,
+  "dailyPnL": -1.1999999999999993,
+  "totalTrades": 3,
+  "winningTrades": 1,
+  "losingTrades": 1,
+  "circuitBreakerTripped": false,
+  "circuitBreakerReason": "",
+  "savedAt": "2026-11-05T14:02:49.237Z"
+}

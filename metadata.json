@@ -1,0 +1,7 @@
+{
+  "name": "SABAA AI SOLUTION",
+  "description": "منصة التحليل المؤسسي والتداول المتقدم بالذكاء الاصطناعي والرؤية الحاسوبية وإدارة المخاطر للأسواق المالية",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

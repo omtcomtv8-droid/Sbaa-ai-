@@ -1,0 +1,9 @@
+# Core dependencies for SBAA Trading Python Engine & Network Evasion
+# Note: The engine features high-performance pure-Python algorithms that run seamlessly
+# even in lightweight environments (Termux, minimal VPS, or containers without binary compilers).
+numpy>=1.24.0
+scipy>=1.10.0
+pandas>=1.5.0
+websockets>=12.0
+requests>=2.31.0
+curl_cffi>=0.7.0

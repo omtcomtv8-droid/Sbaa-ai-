@@ -1,0 +1,12 @@
+{
+  "admin_root": {
+    "id": "admin_root",
+    "username": "admin",
+    "passwordHash": "d687c2aebbeddd41804f3270abda00c9adf733458068211ad07dc5d3d9f0189d7b5ec0d6dc043a66e8bf94bafdf8257e1d3535612b58de9a5d06754c9f7a43ba",
+    "passwordSalt": "1d7e2b478ef53f3152f2df670c3ac9d13cd866446f7012f8ee7ae6f92ac2ff93",
+    "mustChangePassword": true,
+    "createdAt": "2026-10-01T00:48:29.698Z",
+    "updatedAt": "2026-10-01T00:48:29.698Z",
+    "lastLoginAt": "2026-10-08T09:44:04.312Z"
+  }
+}

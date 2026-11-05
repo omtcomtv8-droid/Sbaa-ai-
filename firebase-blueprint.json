@@ -1,0 +1,410 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with display name, email, and preferences",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The unique Firebase Auth user ID"
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name"
+        },
+        "role": {
+          "type": "string",
+          "description": "User account role (e.g., trader, admin, guest)"
+        },
+        "status": {
+          "type": "string",
+          "description": "Account status (ACTIVE, DISABLED)"
+        },
+        "activeActivationId": {
+          "type": "string",
+          "description": "ID of the currently active activation code binding"
+        },
+        "activeExpiresAt": {
+          "type": "string",
+          "description": "Expiration date of the active subscription"
+        },
+        "activeCode": {
+          "type": "string",
+          "description": "Active license code representation"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of account creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last update"
+        },
+        "lastLoginAt": {
+          "type": "string",
+          "description": "ISO timestamp of last login"
+        }
+      },
+      "required": ["uid", "createdAt", "updatedAt"]
+    },
+    "AdminProfile": {
+      "title": "AdminProfile",
+      "description": "Administrator account credentials and status",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique admin document identifier"
+        },
+        "username": {
+          "type": "string",
+          "description": "Admin username"
+        },
+        "passwordHash": {
+          "type": "string",
+          "description": "Cryptographic password hash"
+        },
+        "passwordSalt": {
+          "type": "string",
+          "description": "Password salt"
+        },
+        "mustChangePassword": {
+          "type": "boolean",
+          "description": "Whether administrator must change initial password"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of admin creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last update"
+        }
+      },
+      "required": ["id", "username", "passwordHash", "passwordSalt", "mustChangePassword", "createdAt", "updatedAt"]
+    },
+    "ActivationCode": {
+      "title": "ActivationCode",
+      "description": "Cryptographically secure activation license code",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique code ID"
+        },
+        "code": {
+          "type": "string",
+          "description": "Formatted activation code string (e.g. SABAA-XXXX-XXXX-XXXX)"
+        },
+        "status": {
+          "type": "string",
+          "description": "Status: ACTIVE, UNUSED, EXPIRED, REVOKED, DISABLED"
+        },
+        "durationHours": {
+          "type": "number",
+          "description": "Duration in hours"
+        },
+        "durationLabel": {
+          "type": "string",
+          "description": "Human readable duration label"
+        },
+        "maxDevices": {
+          "type": "number",
+          "description": "Maximum allowed devices limit"
+        },
+        "activeDevicesCount": {
+          "type": "number",
+          "description": "Number of currently active devices"
+        },
+        "boundUserId": {
+          "type": "string",
+          "description": "Google UID of bound user"
+        },
+        "boundUserEmail": {
+          "type": "string",
+          "description": "Email of bound user"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "Creator administrator"
+        },
+        "expiresAt": {
+          "type": "string",
+          "description": "Expiration timestamp"
+        }
+      },
+      "required": ["id", "code", "status", "durationHours", "maxDevices", "createdAt", "createdBy"]
+    },
+    "DeviceRecord": {
+      "title": "DeviceRecord",
+      "description": "Server-side tracked device hardware and session record",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique device record ID"
+        },
+        "deviceId": {
+          "type": "string",
+          "description": "Device identifier"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Associated Google User ID"
+        },
+        "userEmail": {
+          "type": "string",
+          "description": "Associated user email"
+        },
+        "codeId": {
+          "type": "string",
+          "description": "Associated activation code ID"
+        },
+        "code": {
+          "type": "string",
+          "description": "Activation code representation"
+        },
+        "deviceToken": {
+          "type": "string",
+          "description": "Server issued device token"
+        },
+        "fingerprint": {
+          "type": "string",
+          "description": "Device hardware fingerprint"
+        },
+        "userAgent": {
+          "type": "string",
+          "description": "Client user agent"
+        },
+        "ipAddress": {
+          "type": "string",
+          "description": "Client IP address"
+        },
+        "os": {
+          "type": "string",
+          "description": "Operating system"
+        },
+        "browser": {
+          "type": "string",
+          "description": "Browser"
+        },
+        "status": {
+          "type": "string",
+          "description": "Status: ACTIVE or REVOKED"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "First registered timestamp"
+        },
+        "lastActiveAt": {
+          "type": "string",
+          "description": "Last active timestamp"
+        }
+      },
+      "required": ["id", "deviceId", "userId", "codeId", "deviceToken", "status", "createdAt", "lastActiveAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Security and administrative audit trail log",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique log identifier"
+        },
+        "action": {
+          "type": "string",
+          "description": "Action performed"
+        },
+        "actor": {
+          "type": "string",
+          "description": "Actor who initiated action"
+        },
+        "details": {
+          "type": "object",
+          "description": "Metadata details"
+        },
+        "ipAddress": {
+          "type": "string",
+          "description": "IP address"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Timestamp of action"
+        }
+      },
+      "required": ["id", "action", "actor", "timestamp"]
+    },
+    "ConnectionConfig": {
+      "title": "ConnectionConfig",
+      "description": "User platform gateway connection configuration and credentials metadata",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID"
+        },
+        "endpoint": {
+          "type": "string",
+          "description": "WebSocket endpoint gateway"
+        },
+        "isDemo": {
+          "type": "boolean",
+          "description": "Whether the connection is demo or live mode"
+        },
+        "accountUid": {
+          "type": "string",
+          "description": "Pocket Option account identifier"
+        },
+        "status": {
+          "type": "string",
+          "description": "Connection status: connected, disconnected, connecting, failed"
+        },
+        "lastConnectedAt": {
+          "type": "string",
+          "description": "Timestamp of last verified connection"
+        },
+        "lastError": {
+          "type": "string",
+          "description": "Last recorded connection error if any"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last status update"
+        }
+      },
+      "required": ["userId", "endpoint", "isDemo", "status", "updatedAt"]
+    },
+    "TradeOrder": {
+      "title": "TradeOrder",
+      "description": "Persistent record of an executed trade order or journal entry",
+      "type": "object",
+      "properties": {
+        "orderId": {
+          "type": "string",
+          "description": "Unique trade order identifier"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID"
+        },
+        "symbol": {
+          "type": "string",
+          "description": "Asset symbol (e.g., EURUSD_otc)"
+        },
+        "direction": {
+          "type": "string",
+          "description": "BUY or SELL"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Trade stake amount in USD"
+        },
+        "entryPrice": {
+          "type": "number",
+          "description": "Executed entry price"
+        },
+        "stopLoss": {
+          "type": "number",
+          "description": "Calculated stop loss price"
+        },
+        "takeProfit": {
+          "type": "number",
+          "description": "Calculated take profit price"
+        },
+        "timeframe": {
+          "type": "number",
+          "description": "Duration/expiry in seconds"
+        },
+        "status": {
+          "type": "string",
+          "description": "Order status: PENDING, EXECUTED, CLOSED, REJECTED"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Order creation timestamp"
+        }
+      },
+      "required": ["orderId", "userId", "symbol", "direction", "amount", "status", "timestamp"]
+    },
+    "RiskSettings": {
+      "title": "RiskSettings",
+      "description": "User risk management preferences and limits",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID"
+        },
+        "riskPerTrade": {
+          "type": "number",
+          "description": "Max risk percentage per trade (e.g., 2.0)"
+        },
+        "maxDailyLoss": {
+          "type": "number",
+          "description": "Max daily loss limit in percentage (e.g., 5.0)"
+        },
+        "maxConcurrentTrades": {
+          "type": "number",
+          "description": "Maximum number of simultaneous open positions"
+        },
+        "stopLossPips": {
+          "type": "number",
+          "description": "Default stop loss offset in pips"
+        },
+        "takeProfitPips": {
+          "type": "number",
+          "description": "Default take profit offset in pips"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last update"
+        }
+      },
+      "required": ["userId", "riskPerTrade", "maxDailyLoss", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile document owned by the authenticated user"
+    },
+    "/admins/{adminId}": {
+      "schema": "AdminProfile",
+      "description": "Administrator account records"
+    },
+    "/activation_codes/{codeId}": {
+      "schema": "ActivationCode",
+      "description": "Activation license codes"
+    },
+    "/devices/{deviceId}": {
+      "schema": "DeviceRecord",
+      "description": "Authorized hardware device sessions"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Security audit logs"
+    },
+    "/users/{userId}/connections/{connectionId}": {
+      "schema": "ConnectionConfig",
+      "description": "Connection configuration and gateway status"
+    },
+    "/users/{userId}/orders/{orderId}": {
+      "schema": "TradeOrder",
+      "description": "User trade orders and execution logs"
+    },
+    "/users/{userId}/settings/{settingId}": {
+      "schema": "RiskSettings",
+      "description": "User risk preferences and strategy configuration"
+    }
+  }
+}

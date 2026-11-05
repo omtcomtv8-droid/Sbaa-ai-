@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="40%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="10" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  
+  <!-- Rounded Background Card -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+  <rect width="504" height="504" x="4" y="4" rx="108" fill="none" stroke="url(#goldGrad)" stroke-width="4" stroke-opacity="0.3" />
+  
+  <!-- Hexagonal Shield -->
+  <polygon points="256,64 424,160 424,352 256,448 88,352 88,160" 
+           fill="#05070b" 
+           stroke="url(#goldGrad)" 
+           stroke-width="14" 
+           stroke-linejoin="round"
+           filter="url(#glow)" />
+           
+  <!-- Inner Shield Glow Ring -->
+  <polygon points="256,84 404,168 404,344 256,428 108,344 108,168" 
+           fill="#090d16" 
+           stroke="#f59e0b" 
+           stroke-width="3" 
+           stroke-opacity="0.4"
+           stroke-linejoin="round" />
+
+  <!-- Bold Stylized S for SABAA -->
+  <path d="M 340 170 
+           C 340 145, 305 130, 256 130 
+           C 200 130, 165 155, 165 195 
+           C 165 240, 205 255, 260 268 
+           L 275 272 
+           C 320 282, 345 300, 345 335 
+           C 345 380, 305 405, 250 405 
+           C 190 405, 155 375, 155 340 
+           L 195 340 
+           C 195 362, 220 375, 252 375 
+           C 285 375, 310 360, 310 335 
+           C 310 295, 270 282, 220 270 
+           L 205 266 
+           C 160 255, 130 235, 130 195 
+           C 130 150, 175 125, 252 125 
+           C 315 125, 350 152, 350 170 
+           Z" 
+        fill="url(#goldGrad)" 
+        filter="url(#glow)" />
+</svg>
