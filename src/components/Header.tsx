@@ -101,13 +101,36 @@ export const Header: React.FC<HeaderProps> = ({
     };
   }, []);
 
+  const [isSwitchingAccount, setIsSwitchingAccount] = useState(false);
+  const handleToggleAccountMode = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isSwitchingAccount) return;
+    try {
+      setIsSwitchingAccount(true);
+      const isCurrentlyDemo = account?.isDemo ?? (poSession.accountMode === 'DEMO');
+      const targetMode = isCurrentlyDemo ? 'REAL' : 'DEMO';
+      await fetch('/api/account/switch-mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: targetMode }),
+      });
+      setTimeout(() => {
+        setIsSwitchingAccount(false);
+        if (onReconnect) onReconnect();
+      }, 1000);
+    } catch (err) {
+      setIsSwitchingAccount(false);
+      console.error('Failed to switch account mode:', err);
+    }
+  };
+
   const subsystems = diagnostics?.subsystems;
   const overall = subsystems?.overall || 'DISCONNECTED';
   const account = diagnostics?.account;
   const isStale = diagnostics?.isStale ?? true;
   const freshness = diagnostics?.freshnessSeconds ?? 999;
   const latency = diagnostics?.latencyMs ?? 0;
-  const endpoint = diagnostics?.endpoint || 'demo-api-eu.po.market';
+  const endpoint = diagnostics?.endpoint || 'api-eu.po.market';
 
   const effectiveBalance =
     account?.balance !== null && typeof account?.balance === 'number' && !isNaN(account.balance)
@@ -314,34 +337,39 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Subsystem Overall Badge */}
           {getStatusBadge()}
 
-          {/* Real Account Info Pill */}
+          {/* Real Account Info Pill with Click-to-Switch */}
           {account && (
-            <div
+            <button
               id="header-account-pill"
-              className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-slate-300 text-[10px] sm:text-[11px] max-w-[210px] sm:max-w-none truncate"
+              type="button"
+              onClick={handleToggleAccountMode}
+              disabled={isSwitchingAccount}
+              className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 rounded-full bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-amber-500/50 text-slate-300 text-[10px] sm:text-[11px] max-w-[240px] sm:max-w-none truncate cursor-pointer transition-all shadow-sm"
               title={
-                diagnostics?.authVerified && (account.status === 'LIVE' || account.status === 'AUTHENTICATED')
-                  ? `Account Balance: $${account.balance?.toFixed(2)} (${account.isDemo ? t('header.demoAccount', 'Demo') : t('header.realAccount', 'Real')})`
-                  : diagnostics?.authVerified && account.status === 'STALE'
-                  ? `Stale Balance: $${account.balance?.toFixed(2)}`
-                  : subsystems?.auth === 'failed'
-                  ? 'Authentication Rejected: Token invalid or expired'
+                diagnostics?.authVerified
+                  ? (isRTL ? `الحساب الحالي: ${account.isDemo ? 'تجريبي' : 'حقيقي'} ($${effectiveBalance?.toFixed(2) || '0.00'}) - اضغط هنا للتبديل الفوري بين الحقيقي والتجريبي` : `Current: ${account.isDemo ? 'DEMO' : 'REAL'} ($${effectiveBalance?.toFixed(2) || '0.00'}) - Click to toggle between Real & Demo`)
                   : 'Account data from broker protocol'
               }
             >
-              {subsystems?.auth === 'failed' || account.status === 'INVALID' || account.status === 'EXPIRED' ? (
+              {isSwitchingAccount ? (
+                <span className="flex items-center gap-1 text-[9px] text-amber-300 font-bold">
+                  <RefreshCw className="w-2.5 h-2.5 animate-spin text-amber-400" />
+                  <span>{isRTL ? 'تبديل...' : 'Switching...'}</span>
+                </span>
+              ) : subsystems?.auth === 'failed' || account.status === 'INVALID' || account.status === 'EXPIRED' ? (
                 <span className="px-1.5 py-0.2 rounded text-[8px] sm:text-[9px] font-bold uppercase bg-rose-500/15 text-rose-400 border border-rose-500/30 font-sans">
                   {t('header.unauthorized', 'UNAUTHORIZED')}
                 </span>
               ) : diagnostics?.authVerified ? (
                 <span
-                  className={`px-1.5 py-0.2 rounded text-[8px] sm:text-[9px] font-bold uppercase font-sans ${
+                  className={`px-1.5 py-0.2 rounded text-[8px] sm:text-[9px] font-bold uppercase font-sans flex items-center gap-1 ${
                     account.isDemo
                       ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                       : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                   }`}
                 >
-                  {account.isDemo ? 'DEMO' : 'LIVE'}
+                  <span className={`w-1.5 h-1.5 rounded-full ${account.isDemo ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
+                  {account.isDemo ? 'DEMO' : 'REAL'}
                 </span>
               ) : (
                 <span className="px-1.5 py-0.2 rounded text-[8px] sm:text-[9px] font-bold uppercase bg-slate-800 text-slate-400 border border-slate-700 font-sans">
@@ -361,7 +389,7 @@ export const Header: React.FC<HeaderProps> = ({
               ) : (
                 <span className="text-slate-500">N/A</span>
               )}
-            </div>
+            </button>
           )}
 
           {/* Latency badge */}

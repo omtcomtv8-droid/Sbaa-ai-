@@ -16,6 +16,32 @@ import { SbaaPatternDetector } from './SbaaPatternDetector';
 import { SbaaScoringEngine } from './SbaaScoringEngine';
 import { SbaaRiskGuardian } from './SbaaRiskGuardian';
 import { calculateEMA, calculateRSI } from '../indicators';
+import { EmaTrendStrategy } from '../strategies/EmaTrendStrategy';
+import { RsiMomentumStrategy } from '../strategies/RsiMomentumStrategy';
+import { MacdStrategy } from '../strategies/MacdStrategy';
+import { BollingerBounceStrategy } from '../strategies/BollingerBounceStrategy';
+import { CandlestickPatternStrategy } from '../strategies/CandlestickPatternStrategy';
+import { SupportResistanceStrategy } from '../strategies/SupportResistanceStrategy';
+import { BreakoutStrategy } from '../strategies/BreakoutStrategy';
+import { MarketStructureStrategy } from '../strategies/MarketStructureStrategy';
+import { MultiConfluenceStrategy } from '../strategies/MultiConfluenceStrategy';
+import { SmaCrossoverStrategy } from '../strategies/SmaCrossoverStrategy';
+import { MaAlignmentStrategy } from '../strategies/MaAlignmentStrategy';
+import { RsiReversalStrategy } from '../strategies/RsiReversalStrategy';
+import { StochasticStrategy } from '../strategies/StochasticStrategy';
+import { CciStrategy } from '../strategies/CciStrategy';
+import { AdxTrendStrategy } from '../strategies/AdxTrendStrategy';
+import { ParabolicSarStrategy } from '../strategies/ParabolicSarStrategy';
+import { IchimokuStrategy } from '../strategies/IchimokuStrategy';
+import { PivotPointStrategy } from '../strategies/PivotPointStrategy';
+import { FibonacciRetracementStrategy } from '../strategies/FibonacciRetracementStrategy';
+import { PriceActionStrategy } from '../strategies/PriceActionStrategy';
+import { AtrVolatilityStrategy } from '../strategies/AtrVolatilityStrategy';
+import { SuperTrendStrategy } from '../strategies/SuperTrendStrategy';
+import { VolumeFlowStrategy } from '../strategies/VolumeFlowStrategy';
+import { GannPriceTimeStrategy } from '../strategies/GannPriceTimeStrategy';
+import { ElliottWaveStrategy } from '../strategies/ElliottWaveStrategy';
+import { DarvasBoxStrategy } from '../strategies/DarvasBoxStrategy';
 
 const LOG_FILE_PATH = path.resolve(process.cwd(), '.data', 'sbaa_detection_log.json');
 const STATE_FILE_PATH = path.resolve(process.cwd(), '.data', 'sbaa_engine_state.json');
@@ -23,7 +49,7 @@ const STATE_FILE_PATH = path.resolve(process.cwd(), '.data', 'sbaa_engine_state.
 export class SbaaStrategyEngine {
   private config: SbaaConfig = {
     enabled: true,
-    autoDemoExecution: true,
+    autoDemoExecution: false,
     minScoreThreshold: 80,
     baseTradeAmount: 10.0,
     maxDailyLoss: 50.0,
@@ -182,7 +208,8 @@ export class SbaaStrategyEngine {
   public evaluateMarket(
     asset: string,
     timeframe: number,
-    candlesOverride?: Candle[]
+    candlesOverride?: Candle[],
+    options?: { autoExecute?: boolean }
   ): SbaaDetectionLogRecord {
     this.lastAnalysisTimestamp = Date.now();
     this.state = 'SCANNING';
@@ -232,7 +259,64 @@ export class SbaaStrategyEngine {
     // Step 1: Detect technical candlestick & liquidity patterns
     this.state = 'SCANNING';
     const detection = SbaaPatternDetector.detectPatterns(candles);
-    const pattern = detection.primaryPattern;
+    let pattern = detection.primaryPattern;
+
+    // Step 1b: Evaluate All 26 Modular Quantitative Strategies Integrated Inside SBAA
+    const rawStratResults = [
+      EmaTrendStrategy.evaluate(candles, { enabled: true, fastPeriod: 9, slowPeriod: 21, filterPeriod: 50, weight: 1.0 }),
+      RsiMomentumStrategy.evaluate(candles, { enabled: true, period: 14, overbought: 70, oversold: 30, weight: 1.0 }),
+      MacdStrategy.evaluate(candles, { enabled: true, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9, weight: 1.0 }),
+      BollingerBounceStrategy.evaluate(candles, { enabled: true, period: 20, stdDev: 2, weight: 1.0 }),
+      CandlestickPatternStrategy.evaluate(candles, { enabled: true, minPatternStrength: 1, requireTrendAlignment: false, weight: 1.0 }),
+      SupportResistanceStrategy.evaluate(candles, { enabled: true, lookback: 40, clusterTolerancePercent: 0.08, weight: 1.0 }),
+      BreakoutStrategy.evaluate(candles, { enabled: true, lookback: 20, atrFilterMultiplier: 1.1, weight: 1.0 }),
+      MarketStructureStrategy.evaluate(candles, { enabled: true, swingLookback: 2, weight: 1.0 }),
+      MultiConfluenceStrategy.evaluate(candles, { enabled: true, weight: 1.0 }),
+      SmaCrossoverStrategy.evaluate(candles),
+      MaAlignmentStrategy.evaluate(candles),
+      RsiReversalStrategy.evaluate(candles),
+      StochasticStrategy.evaluate(candles),
+      CciStrategy.evaluate(candles),
+      AdxTrendStrategy.evaluate(candles),
+      ParabolicSarStrategy.evaluate(candles),
+      IchimokuStrategy.evaluate(candles),
+      PivotPointStrategy.evaluate(candles),
+      FibonacciRetracementStrategy.evaluate(candles),
+      PriceActionStrategy.evaluate(candles),
+      AtrVolatilityStrategy.evaluate(candles),
+      SuperTrendStrategy.evaluate(candles),
+      VolumeFlowStrategy.evaluate(candles),
+      GannPriceTimeStrategy.evaluate(candles),
+      ElliottWaveStrategy.evaluate(candles),
+      DarvasBoxStrategy.evaluate(candles),
+    ];
+
+    const qualifiedStrats = rawStratResults.filter((s) => s.qualified && (s.signal === 'UP' || s.signal === 'DOWN'));
+    const upStrats = qualifiedStrats.filter((s) => s.signal === 'UP');
+    const downStrats = qualifiedStrats.filter((s) => s.signal === 'DOWN');
+
+    // If no strict candlestick pattern was detected, synthesize pattern from the best qualified integrated strategy
+    if (!pattern && qualifiedStrats.length > 0) {
+      const topStrat = qualifiedStrats.slice().sort(
+        (a, b) => (b.normalizedScore ?? b.rawScore ?? 0) - (a.normalizedScore ?? a.rawScore ?? 0)
+      )[0];
+
+      if (topStrat && (upStrats.length >= downStrats.length || downStrats.length >= upStrats.length)) {
+        const dir = topStrat.signal === 'UP' ? 'BUY' : 'SELL';
+        pattern = {
+          type: (topStrat.strategyId.toUpperCase().replace(/[^A-Z0-9_]/g, '_')) as any,
+          nameAr: `استراتيجية سبع المدمجة (${topStrat.strategyName})`,
+          nameEn: `SBAA Integrated (${topStrat.strategyName})`,
+          direction: dir,
+          confidence: (topStrat.normalizedScore ?? 75) / 100,
+          candleIndex: candles.length - 1,
+          triggerPrice: candles[candles.length - 1].close,
+          descriptionAr: `تأكيد نموذج واستراتيجية ${topStrat.strategyName} بقوة ${topStrat.normalizedScore ?? 75}% داخل محرك سبع`,
+          descriptionEn: `Signal from integrated ${topStrat.strategyName} within SBAA`,
+          isConfirmed: true,
+        };
+      }
+    }
 
     if (pattern) {
       this.patternsDetectedCount++;
@@ -285,8 +369,8 @@ export class SbaaStrategyEngine {
       tradeStatus: 'NOT_TRIGGERED',
     };
 
-    // Step 5: Risk Validation & Auto Demo Execution
-    if (evalResult.isQualifiedForDemo && this.config.autoDemoExecution && evalResult.decision !== 'WAIT') {
+    // Step 5: Risk Validation & Auto Demo Execution (strictly single-orchestrated, never dual-worker)
+    if (options?.autoExecute && evalResult.isQualifiedForDemo && this.config.autoDemoExecution && evalResult.decision !== 'WAIT') {
       this.state = 'RISK_VALIDATION';
       const riskCheck = this.riskGuardian.validateTradeExecution({
         amount: this.config.baseTradeAmount,

@@ -36,19 +36,54 @@ export interface AutoTraderLog {
 }
 
 export type OrderLifecycleState =
+  | 'CREATED'
   | 'PENDING'
   | 'SUBMITTED'
   | 'ACCEPTED'
+  | 'OPEN'
+  | 'EXPIRING'
+  | 'SETTLING'
   | 'COMPLETED'
   | 'REJECTED'
-  | 'CANCELLED'
   | 'FAILED'
-  | 'TIMEOUT'
   | 'UNKNOWN';
+
+export class TradeLifecycleManager {
+  public static readonly VALID_TRANSITIONS: Record<OrderLifecycleState, OrderLifecycleState[]> = {
+    CREATED: ['PENDING', 'SUBMITTED', 'REJECTED', 'FAILED'],
+    PENDING: ['SUBMITTED', 'REJECTED', 'FAILED', 'UNKNOWN'],
+    SUBMITTED: ['ACCEPTED', 'REJECTED', 'FAILED', 'UNKNOWN'],
+    ACCEPTED: ['OPEN', 'EXPIRING', 'SETTLING', 'COMPLETED', 'UNKNOWN'],
+    OPEN: ['EXPIRING', 'SETTLING', 'COMPLETED', 'UNKNOWN'],
+    EXPIRING: ['SETTLING', 'COMPLETED', 'UNKNOWN'],
+    SETTLING: ['COMPLETED', 'UNKNOWN'],
+    COMPLETED: [], // Terminal state - no further transitions permitted
+    REJECTED: [],  // Terminal state - rejected prior to execution
+    FAILED: [],    // Terminal state - network/platform failure
+    UNKNOWN: ['ACCEPTED', 'OPEN', 'COMPLETED', 'FAILED'],
+  };
+
+  public static canTransition(current: OrderLifecycleState, next: OrderLifecycleState): boolean {
+    if (current === next) return true;
+    const allowed = this.VALID_TRANSITIONS[current] || [];
+    return allowed.includes(next);
+  }
+
+  public static isTerminal(state: OrderLifecycleState): boolean {
+    return state === 'COMPLETED' || state === 'REJECTED' || state === 'FAILED';
+  }
+
+  public static isActive(state: OrderLifecycleState): boolean {
+    return ['CREATED', 'PENDING', 'SUBMITTED', 'ACCEPTED', 'OPEN', 'EXPIRING', 'SETTLING'].includes(state);
+  }
+}
 
 export interface AutoTraderTradeRecord {
   id: string;
+  runCycleId: string;
+  signalId?: string;
   timestamp: number;
+  candleTimestamp?: number;
   ticketId?: string;
   idempotencyKey: string;
   asset: string;
@@ -58,10 +93,12 @@ export interface AutoTraderTradeRecord {
   closePrice?: number;
   profit?: number;
   lifecycle: OrderLifecycleState;
-  status: 'PENDING' | 'WON' | 'LOST' | 'FAILED';
+  status: 'PENDING' | 'WON' | 'LOST' | 'DRAW' | 'FAILED';
   strategy: string;
   rejectionReason?: string;
   durationSeconds: number;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface BacktestReport {
@@ -117,6 +154,11 @@ export class AutoTraderEngine {
 
   private isRunning: boolean = false;
   private isEmergencyStopped: boolean = false;
+  private runCycleId: string = 'rc_' + Date.now();
+  private executionLock: boolean = false;
+  private duplicateOrdersPreventedCount: number = 0;
+  private lastExecutionBlockedReason: string = '';
+
   private consecutiveTradesCount: number = 0;
   private totalTrades: number = 0;
   private winningTrades: number = 0;
@@ -150,6 +192,13 @@ export class AutoTraderEngine {
     // Load persisted state across server restarts (Rule 16)
     this.loadPersistedState();
 
+    // Listen to deals opened from PocketOptionService
+    if (typeof this.poService?.onDealOpened === 'function') {
+      this.poService.onDealOpened((deal) => {
+        this.handleDealOpened(deal);
+      });
+    }
+
     // Listen to deals closed from PocketOptionService
     if (typeof this.poService?.onDealClosed === 'function') {
       this.poService.onDealClosed((deal) => {
@@ -177,16 +226,22 @@ export class AutoTraderEngine {
     const authStatus = brokerDiag?.subsystems?.auth || 'none';
     const isBrokerConnected = wsStatus === 'connected' && authStatus === 'success';
 
+    const activeTrade = this.trades.find((t) => TradeLifecycleManager.isActive(t.lifecycle)) || null;
+
     return {
       isRunning: this.isRunning,
       isEmergencyStopped: this.isEmergencyStopped,
+      runCycleId: this.runCycleId,
+      activeTrade,
+      duplicateOrdersPreventedCount: this.duplicateOrdersPreventedCount,
+      lastExecutionBlockedReason: this.lastExecutionBlockedReason,
       config: this.config,
       totalTrades: this.totalTrades,
       winningTrades: this.winningTrades,
       losingTrades: this.losingTrades,
       drawTrades: this.drawTrades,
-      acceptedTradesCount: this.trades.filter((t) => t.lifecycle === 'ACCEPTED' || t.lifecycle === 'COMPLETED').length,
-      rejectedTradesCount: this.trades.filter((t) => t.lifecycle === 'REJECTED' || t.lifecycle === 'FAILED').length,
+      acceptedTradesCount: this.trades.filter((t) => ['ACCEPTED', 'OPEN', 'EXPIRING', 'SETTLING', 'COMPLETED'].includes(t.lifecycle)).length,
+      rejectedTradesCount: this.trades.filter((t) => ['REJECTED', 'FAILED'].includes(t.lifecycle)).length,
       winRate: (this.winningTrades + this.losingTrades) > 0
         ? Number(((this.winningTrades / (this.winningTrades + this.losingTrades)) * 100).toFixed(1))
         : 0,
@@ -214,11 +269,78 @@ export class AutoTraderEngine {
     };
   }
 
+  public hasActiveOpenTrade(): boolean {
+    return this.trades.some((t) => TradeLifecycleManager.isActive(t.lifecycle));
+  }
+
+  public transitionTradeState(
+    tradeIdOrTicket: string,
+    nextState: OrderLifecycleState,
+    extraData?: Partial<AutoTraderTradeRecord>
+  ): boolean {
+    const trade = this.trades.find((t) => t.id === tradeIdOrTicket || t.ticketId === tradeIdOrTicket);
+    if (!trade) {
+      return false;
+    }
+
+    if (!TradeLifecycleManager.canTransition(trade.lifecycle, nextState)) {
+      this.addLog(
+        'SYSTEM',
+        'warn',
+        `⚠️ محاولة انتقال حالة غير مصرح بها للصفقة (${trade.id}): لا يمكن الانتقال من ${trade.lifecycle} إلى ${nextState}`
+      );
+      return false;
+    }
+
+    const previousState = trade.lifecycle;
+    trade.lifecycle = nextState;
+    trade.updatedAt = Date.now();
+
+    if (extraData) {
+      if (extraData.ticketId && !trade.ticketId) trade.ticketId = extraData.ticketId;
+      if (extraData.openPrice !== undefined) trade.openPrice = extraData.openPrice;
+      if (extraData.closePrice !== undefined) trade.closePrice = extraData.closePrice;
+      if (extraData.profit !== undefined) trade.profit = extraData.profit;
+      if (extraData.status) trade.status = extraData.status;
+      if (extraData.rejectionReason) trade.rejectionReason = extraData.rejectionReason;
+    }
+
+    this.addLog(
+      'ORDER',
+      'info',
+      `🔄 تحديث حالة الصفقة #${trade.ticketId || trade.id}: ${previousState} ➔ ${nextState}`
+    );
+
+    this.persistState();
+    this.notifyStatusChange();
+    return true;
+  }
+
+  private handleDealOpened(deal: any) {
+    if (!deal) return;
+    const dealId = String(deal.id || deal.ticketId || '');
+    const matchingTrade = this.trades.find((t) => t.ticketId === dealId || t.id === dealId);
+    if (matchingTrade) {
+      // Transition from SUBMITTED/ACCEPTED to OPEN in place - NEVER create duplicate trade!
+      this.transitionTradeState(matchingTrade.id, 'OPEN', {
+        openPrice: deal.openPrice || matchingTrade.openPrice,
+      });
+    }
+  }
+
   public start(userConfig?: Partial<AutoTraderConfig>): { success: boolean; message: string } {
     if (this.isEmergencyStopped) {
       return {
         success: false,
         message: 'لا يمكن التشغيل: تم تفعيل الإيقاف الطارئ سابقاً. يرجى إلغاء الإيقاف الطارئ أولاً.',
+      };
+    }
+
+    // Problem 5: Enforce single worker cycle per bot instance
+    if (this.isRunning) {
+      return {
+        success: true,
+        message: 'البوت الآلي قيد التشغيل بالفعل (دورة التشغيل نشطة).',
       };
     }
 
@@ -237,8 +359,17 @@ export class AutoTraderEngine {
       };
     }
 
+    this.runCycleId = `rc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    this.executionLock = false;
+    this.isExecutingTrade = false;
     this.isRunning = true;
-    this.addLog('SYSTEM', 'success', `🚀 تم بدء تشغيل البوت الآلي على استراتيجية '${this.config.strategyId}'`);
+
+    // Disarm any rogue dual-worker execution in SBAA Engine
+    if (this.sbaaEngine) {
+      this.sbaaEngine.updateConfig({ autoDemoExecution: false });
+    }
+
+    this.addLog('SYSTEM', 'success', `🚀 تم بدء تشغيل البوت الآلي على استراتيجية '${this.config.strategyId}' (دورة تشغيل: ${this.runCycleId})`);
     this.addLog('RISK', 'info', `🛑 إدارة المخاطر المعتمدة: حد الخسارة -$${this.config.stopLoss} | هدف الربح +$${this.config.takeProfit}`);
     this.addLog('SECURITY', 'info', `🛡️ تم تفعيل طبقات الحماية والتأخير البشري وعشوائية المبالغ`);
 
@@ -251,6 +382,7 @@ export class AutoTraderEngine {
     this.isRunning = false;
     this.isInRestBreak = false;
     this.isExecutingTrade = false;
+    this.executionLock = false;
     this.addLog('SYSTEM', 'warn', '🛑 تم إيقاف البوت الآلي يدوياً من قبل المستخدم');
     this.persistState();
     this.notifyStatusChange();
@@ -528,7 +660,9 @@ export class AutoTraderEngine {
    * Main Strategy Signal Listener - Runs automatically on every live candle/tick (Rule 4, 8, 20)
    */
   public async onSignalUpdate(signal: Signal | null) {
-    if (!this.isRunning || this.isEmergencyStopped || !signal || this.isExecutingTrade) return;
+    if (!this.isRunning || this.isEmergencyStopped || !signal || this.isExecutingTrade || this.executionLock) {
+      return;
+    }
 
     const now = Date.now();
 
@@ -550,6 +684,12 @@ export class AutoTraderEngine {
 
     // Minimum cooldown between trades to avoid over-trading (Rule 5)
     if (now - this.lastTradeSignalTime < this.config.cooldownBetweenTradesSec * 1000) return;
+
+    // Problem 3 & Problem 4: Enforce max concurrent trades (strictly 1 active trade at a time)
+    if (this.config.maxConcurrentTrades <= 1 && this.hasActiveOpenTrade()) {
+      this.lastExecutionBlockedReason = 'يوجد صفقة نشطة بالفعل قيد التنفيذ أو الانتظار؛ حظر فتح صفقات متزامنة.';
+      return;
+    }
 
     // Evaluate target action based on chosen strategy
     const tradeDecision = this.evaluateSignal(signal);
@@ -576,10 +716,19 @@ export class AutoTraderEngine {
       return;
     }
 
-    // Idempotency token to prevent duplicate order generation (Rule 7)
-    const idempotencyKey = `ord_${signal.asset}_${signal.timestamp || now}_${tradeDecision.action}`;
+    // Problem 3: Robust Idempotency Key anchored to Candle Timestamp + RunCycleId (prevents repeated tick orders)
+    const tf = this.config.timeframe || 60;
+    const targetAsset = this.config.asset || signal.asset || 'EURUSD_otc';
+    const candleTimestamp =
+      (signal as any).candleTimestamp ||
+      (signal as any).candleTime ||
+      (signal.timestamp ? Math.floor(signal.timestamp / (tf * 1000)) * (tf * 1000) : Math.floor(now / (tf * 1000)) * (tf * 1000));
+
+    const idempotencyKey = `ord_${this.runCycleId}_${targetAsset}_${tf}_${candleTimestamp}_${tradeDecision.action}`;
     if (this.processedOrderTokens.has(idempotencyKey)) {
-      return; // Already processed this exact signal
+      this.duplicateOrdersPreventedCount++;
+      this.lastExecutionBlockedReason = `طلب مكرر محظور بنفس دورة التشغيل وعلى شمعة الفريم ذاتها: ${idempotencyKey}`;
+      return; // Already processed this exact signal on this candle!
     }
     this.processedOrderTokens.add(idempotencyKey);
 
@@ -588,6 +737,8 @@ export class AutoTraderEngine {
       tradeDecision.action,
       tradeDecision.reason,
       idempotencyKey,
+      candleTimestamp,
+      (signal as any)?.id || `sig_${candleTimestamp}`,
       tradeDecision.duration,
       tradeDecision.strategyName
     );
@@ -602,11 +753,12 @@ export class AutoTraderEngine {
     const { strategyId } = this.config;
     const currentTf = this.config.timeframe || 60;
 
-    // Option 1: SBAA Pro Engine (Integrated 6 Pillars + 100-Point Scoring Matrix)
+    // Option 1: SBAA Pro Engine (Integrated 6 Pillars + 26 Quantitative Strategies Master Matrix)
     if (strategyId === 'sbaa' || strategyId.toLowerCase().includes('sbaa') || strategyId.includes('سبع')) {
       if (this.sbaaEngine) {
         const sbaaRecord = this.sbaaEngine.evaluateMarket(this.config.asset, currentTf);
-        if ((sbaaRecord.systemDecision === 'BUY' || sbaaRecord.systemDecision === 'SELL') && sbaaRecord.confluenceScore >= 80) {
+        const minThreshold = this.config.minSignalStrength || 70;
+        if ((sbaaRecord.systemDecision === 'BUY' || sbaaRecord.systemDecision === 'SELL') && sbaaRecord.confluenceScore >= Math.min(75, minThreshold)) {
           const action = sbaaRecord.systemDecision === 'BUY' ? 'call' : 'put';
           const isBreakout = sbaaRecord.patternNameAr.includes('كسر') || sbaaRecord.patternNameAr.includes('Breakout');
           // Dynamic duration: 2 candles on breakout, 1 candle on normal setup
@@ -614,24 +766,62 @@ export class AutoTraderEngine {
           this.addLog(
             'ORDER',
             'info',
-            `[SBAA سبع] إشارة ${action === 'call' ? 'شراء' : 'بيع'} مؤكدة بنتيجة توافق ${sbaaRecord.confluenceScore}/100 على نموذج ${sbaaRecord.patternNameAr} (المدة: ${duration}s)`
+            `[SBAA سبع - المحرك المدمج] إشارة ${action === 'call' ? 'شراء' : 'بيع'} مؤكدة بنتيجة توافق ${sbaaRecord.confluenceScore}/100 على ${sbaaRecord.patternNameAr} (المدة: ${duration}s)`
           );
           return {
             action,
             reason: `[SBAA سبع - توافق ${sbaaRecord.confluenceScore}/100]: ${sbaaRecord.patternNameAr} عند ${sbaaRecord.srZone} (${sbaaRecord.reasonAr})`,
             duration,
-            strategyName: 'SBAA Pro Engine (استراتيجية سبع المطورة)',
+            strategyName: 'SBAA Pro Engine (استراتيجية سبع الذكية المطورة - المحرك الشامل المدمج)',
           };
         }
-        // Strict no-trade when score is below 80 or WAIT - strictly zero random/fake entries!
-        return null;
       }
+
+      // Concurrently inspect all 26 quantitative strategies integrated within SBAA
+      if (signal.strategies && Array.isArray(signal.strategies)) {
+        const qualifiedStrats = signal.strategies.filter(
+          (s) => s.qualified && (s.signal === 'UP' || s.signal === 'DOWN')
+        );
+
+        const upCount = qualifiedStrats.filter((s) => s.signal === 'UP').length;
+        const downCount = qualifiedStrats.filter((s) => s.signal === 'DOWN').length;
+
+        // Anti-conflict verification
+        if (!(upCount >= 2 && downCount >= 2)) {
+          const threshold = this.config.minSignalStrength || 70;
+          const candidates = qualifiedStrats
+            .filter((s) => (s.normalizedScore ?? s.rawScore ?? 0) >= threshold)
+            .sort((a, b) => (b.normalizedScore ?? b.rawScore ?? 0) - (a.normalizedScore ?? a.rawScore ?? 0));
+
+          if (candidates.length > 0) {
+            const best = candidates[0];
+            const action: 'call' | 'put' = best.signal === 'UP' ? 'call' : 'put';
+            const candleMultiplier = (signal.expiryDurationSec && signal.timeframe && signal.expiryDurationSec > signal.timeframe) ? 2 : 1;
+            const duration = currentTf * candleMultiplier;
+            this.addLog(
+              'ORDER',
+              'info',
+              `[SBAA سبع - دمج شامل] إشارة ${action === 'call' ? 'شراء' : 'بيع'} مؤكدة عبر استراتيجية ${best.strategyName} (${best.normalizedScore ?? best.rawScore}%) داخل محرك سبع (المدة: ${duration}s)`
+            );
+            return {
+              action,
+              reason: `[SBAA سبع - المحرك الشامل المدمج]: استراتيجية ${best.strategyName} مؤهلة بنقاط ${best.normalizedScore ?? best.rawScore}% مع توافق هيكلي`,
+              duration,
+              strategyName: `SBAA Pro (${best.strategyName})`,
+            };
+          }
+        }
+      }
+
+      // Strict no-trade when score is below threshold or WAIT - strictly zero random/fake entries!
+      return null;
     }
 
     // Option 2: Confluence of all quantitative strategies
     if (strategyId === 'confluence') {
+      const candleMultiplier = (signal.expiryDurationSec && signal.timeframe && signal.expiryDurationSec > signal.timeframe) ? 2 : 1;
+      const duration = currentTf * candleMultiplier;
       if (signal.type === 'UP' || signal.direction === 'UP') {
-        const duration = signal.expiryDurationSec || currentTf;
         return {
           action: 'call',
           reason: `توافق استراتيجيات قوي للصعود (ثقة: ${signal.confidence}%)`,
@@ -640,7 +830,6 @@ export class AutoTraderEngine {
         };
       }
       if (signal.type === 'DOWN' || signal.direction === 'DOWN') {
-        const duration = signal.expiryDurationSec || currentTf;
         return {
           action: 'put',
           reason: `توافق استراتيجيات قوي للهبوط (ثقة: ${signal.confidence}%)`,
@@ -653,10 +842,10 @@ export class AutoTraderEngine {
 
     // Option 3: Intelligent Autonomous Selection (Auto-Select Highest Edge Without Conflict)
     if (strategyId === 'auto' || strategyId === 'all') {
-      // First priority: Check if SBAA has reached institutional qualification (>= 80/100)
       if (this.sbaaEngine) {
         const sbaaRecord = this.sbaaEngine.evaluateMarket(this.config.asset, currentTf);
-        if ((sbaaRecord.systemDecision === 'BUY' || sbaaRecord.systemDecision === 'SELL') && sbaaRecord.confluenceScore >= 80) {
+        const minThreshold = this.config.minSignalStrength || 70;
+        if ((sbaaRecord.systemDecision === 'BUY' || sbaaRecord.systemDecision === 'SELL') && sbaaRecord.confluenceScore >= Math.min(80, minThreshold)) {
           const action = sbaaRecord.systemDecision === 'BUY' ? 'call' : 'put';
           const isBreakout = sbaaRecord.patternNameAr.includes('كسر') || sbaaRecord.patternNameAr.includes('Breakout');
           const duration = currentTf * (isBreakout && currentTf <= 900 ? 2 : 1);
@@ -691,7 +880,8 @@ export class AutoTraderEngine {
         if (candidates.length > 0) {
           const best = candidates[0];
           const action: 'call' | 'put' = best.signal === 'UP' ? 'call' : 'put';
-          const duration = signal.expiryDurationSec || currentTf;
+          const candleMultiplier = (signal.expiryDurationSec && signal.timeframe && signal.expiryDurationSec > signal.timeframe) ? 2 : 1;
+          const duration = currentTf * candleMultiplier;
           return {
             action,
             reason: `[الانتقاء الذكي]: استراتيجية ${best.strategyName} مؤهلة بنقاط ${best.normalizedScore ?? best.rawScore}%`,
@@ -713,7 +903,8 @@ export class AutoTraderEngine {
         const rsi = signal.strategies.find((s) => s.strategyId === 'rsi' || s.strategyId === 'rsi_momentum');
         const isBull = (macd && (macd.signal === 'UP' || (macd.score ?? 0) > 0)) || (rsi && (rsi.signal === 'UP' || (rsi.score ?? 0) > 0));
         const isBear = (macd && (macd.signal === 'DOWN' || (macd.score ?? 0) < 0)) || (rsi && (rsi.signal === 'DOWN' || (rsi.score ?? 0) < 0));
-        const duration = signal.expiryDurationSec || currentTf;
+        const candleMultiplier = (signal.expiryDurationSec && signal.timeframe && signal.expiryDurationSec > signal.timeframe) ? 2 : 1;
+        const duration = currentTf * candleMultiplier;
         if (isBull && !isBear) {
           return { action: 'call', reason: 'إشارة صعود مؤكدة من استراتيجية RSI + MACD', duration, strategyName: 'RSI + MACD' };
         }
@@ -741,7 +932,8 @@ export class AutoTraderEngine {
           strat.signal === 'DOWN' ||
           (typeof strat.score === 'number' && strat.score < 0);
 
-        const duration = signal.expiryDurationSec || currentTf;
+        const candleMultiplier = (signal.expiryDurationSec && signal.timeframe && signal.expiryDurationSec > signal.timeframe) ? 2 : 1;
+        const duration = currentTf * candleMultiplier;
 
         if (isBull && !isBear) {
           return {
@@ -769,23 +961,29 @@ export class AutoTraderEngine {
     action: 'call' | 'put',
     reason: string,
     idempotencyKey: string,
+    candleTimestamp: number,
+    signalId: string,
     customDuration?: number,
     strategyName?: string
   ) {
     this.isExecutingTrade = true;
+    this.executionLock = true;
     this.lastTradeSignalTime = Date.now();
 
-    try {
-      this.addLog('ORDER', 'info', `[PENDING] استلام إشارة جديدة: ${reason}`);
+    const targetAsset = this.config.asset || this.poService.getActiveAsset() || 'EURUSD_otc';
+    const tf = this.config.timeframe || 60;
+    const tradeId = `at_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 
-      // 1. Calculate Exact Trade Amount (Exact cent precision, transparent and un-randomized)
+    try {
+      this.addLog('ORDER', 'info', `[CREATED] إنشاء سجل الصفقة المبدئي (${tradeId}) بناء على إشارة: ${reason}`);
+
+      // 1. Calculate Exact Trade Amount
       let calculatedAmount = this.config.baseAmount;
       if (this.config.enableMartingale && this.currentMartingaleStep > 0) {
         const step = Math.min(this.currentMartingaleStep, this.config.maxMartingaleDepth);
         calculatedAmount = this.config.baseAmount * Math.pow(this.config.martingaleMultiplier, step);
       }
 
-      // Exact 2 decimal places (cents) matching user selection without any 25$ cap
       let finalAmount = Math.round(calculatedAmount * 100) / 100;
       finalAmount = Math.max(1.0, Math.min(finalAmount, 1000.0));
 
@@ -801,52 +999,72 @@ export class AutoTraderEngine {
         return;
       }
 
-      this.addLog('ORDER', 'info', `💰 مبلغ الصفقة المعتمد: $${finalAmount.toFixed(2)} (${this.config.isDemo ? 'حساب تجريبي DEMO' : 'حساب حقيقي REAL'})`);
+      // 2. Dynamic Expiry Duration Determination - Strictly anchored to selected timeframe
+      const SUPPORTED_EXPIRIES = [5, 15, 30, 60, 120, 180, 300, 600, 900, 1800, 3600];
+      let targetTime = customDuration || tf;
+      if (!SUPPORTED_EXPIRIES.includes(targetTime)) {
+        targetTime = tf;
+      }
+      if (targetTime < tf) {
+        targetTime = tf;
+      }
 
-      // 2. Human Hesitation Delay (1.5 to 4.2 seconds)
-      const hesitationSec = Number((1.5 + Math.random() * 2.7).toFixed(2));
-      this.addLog('HESITATION', 'info', `🧠 تطبيق التردد البشري: انتظار ${hesitationSec}s لمحاكاة تردد عين ويد المتداول...`);
+      // Step A: Instantiate Trade Record in 'CREATED' state
+      const tradeRecord: AutoTraderTradeRecord = {
+        id: tradeId,
+        runCycleId: this.runCycleId,
+        signalId,
+        timestamp: Date.now(),
+        candleTimestamp,
+        idempotencyKey,
+        asset: targetAsset,
+        action,
+        amount: finalAmount,
+        lifecycle: 'CREATED',
+        status: 'PENDING',
+        strategy: strategyName || this.config.strategyId,
+        durationSeconds: targetTime,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      this.trades.push(tradeRecord);
+      this.persistState();
       this.notifyStatusChange();
+
+      // Step B: Transition to 'PENDING' during human hesitation and pre-click checks
+      this.transitionTradeState(tradeId, 'PENDING');
+
+      // Human Hesitation Delay (1.5 to 3.5 seconds)
+      const hesitationSec = Number((1.5 + Math.random() * 2.0).toFixed(2));
+      this.addLog('HESITATION', 'info', `🧠 تطبيق التردد البشري: انتظار ${hesitationSec}s لمحاكاة سلوك المتداول البشري...`);
 
       await new Promise((resolve) => setTimeout(resolve, hesitationSec * 1000));
 
       if (this.isEmergencyStopped || !this.isRunning) {
         this.addLog('ORDER', 'warn', '[CANCELLED] تم إلغاء الصفقة قبل الإرسال لتفعيل أمر التوقف');
+        this.transitionTradeState(tradeId, 'REJECTED', { rejectionReason: 'توقف البوت أثناء فترة الانتظار' });
         return;
       }
 
-      // 3. Pre-click Delay (200-500ms)
-      const preClickMs = Math.floor(200 + Math.random() * 300);
+      // Pre-click Delay (150-300ms)
+      const preClickMs = Math.floor(150 + Math.random() * 150);
       await new Promise((resolve) => setTimeout(resolve, preClickMs));
 
-      // 4. Timeframe & Minimum Candle Count Verification (Strictly No 1M Fallback)
-      const targetAsset = this.config.asset || this.poService.getActiveAsset() || 'EURUSD_otc';
-      const tf = this.config.timeframe || 60;
+      // Minimum Candle Count Verification (Strictly No 1M Fallback)
       const candleCount = this.poService.getCandleCount(targetAsset, tf);
-
       if (candleCount < 15) {
         this.addLog(
           'ORDER',
           'warn',
-          `⚠️ تم إلغاء تنفيذ الصفقة: عدد شموع الفريم المحدد (${tf}s) غير كافٍ للتحليل (${candleCount}/15 شمعة مطلوبة). بانتظار اكتمال البيانات بدون أي تراجع لفريم آخر.`
+          `⚠️ تم إلغاء تنفيذ الصفقة: عدد شموع الفريم المحدد (${tf}s) غير كافٍ للتحليل (${candleCount}/15 شمعة مطلوبة).`
         );
+        this.transitionTradeState(tradeId, 'REJECTED', { rejectionReason: 'بيانات الشموع للفريم غير كافية' });
         return;
       }
 
-      // 5. Dynamic Expiry Duration Determination
-      const SUPPORTED_EXPIRIES = [5, 15, 30, 60, 120, 300, 600, 900, 1800, 3600];
-      let targetTime = customDuration || tf;
-      if (!SUPPORTED_EXPIRIES.includes(targetTime)) {
-        targetTime = tf;
-      }
-
-      this.addLog(
-        'ORDER',
-        'info',
-        `⏱️ مدة الصفقة المحددة: ${targetTime}s (الفريم المستخدم: ${tf}s - الاستراتيجية: ${strategyName || this.config.strategyId})`
-      );
-
-      this.addLog('ORDER', 'info', `[SUBMITTED] إرسال أمر الصفقة إلى المنصة: ${action.toUpperCase()} على ${targetAsset} بمبلغ $${finalAmount} لمدة ${targetTime}s`);
+      // Step C: Transition to 'SUBMITTED' right before dispatching over WebSocket
+      this.transitionTradeState(tradeId, 'SUBMITTED');
+      this.addLog('ORDER', 'info', `[SUBMITTED] إرسال أمر الصفقة إلى خادم المنصة: ${action.toUpperCase()} على ${targetAsset} بمبلغ $${finalAmount} لمدة ${targetTime}s`);
 
       const result = await this.poService.openDeal({
         asset: targetAsset,
@@ -857,42 +1075,44 @@ export class AutoTraderEngine {
       });
 
       if (result.success && result.deal) {
-        const ticketId = result.deal.id || String(result.requestId);
+        const ticketId = String(result.deal.id || result.requestId || '');
         this.totalTrades++;
         this.consecutiveTradesCount++;
 
-        const tradeRecord: AutoTraderTradeRecord = {
-          id: `at_${Date.now()}`,
-          timestamp: Date.now(),
+        // Step D: Transition to 'ACCEPTED'
+        this.transitionTradeState(tradeId, 'ACCEPTED', {
           ticketId,
-          idempotencyKey,
-          asset: targetAsset,
-          action,
-          amount: finalAmount,
           openPrice: result.deal.openPrice,
-          lifecycle: 'ACCEPTED',
-          status: 'PENDING',
-          strategy: strategyName || this.config.strategyId,
-          durationSeconds: targetTime,
-        };
-        this.trades.push(tradeRecord);
+        });
 
-        this.addLog('ORDER', 'success', `[ACCEPTED] تم قبول الصفقة! تذكرة #${ticketId} | سعر الفتح: ${result.deal.openPrice || 'جارٍ'}`);
+        // Step E: Immediately transition to 'OPEN' as active position
+        this.transitionTradeState(tradeId, 'OPEN', {
+          openPrice: result.deal.openPrice,
+        });
 
-        // Check if it's time for a Human Rest Break (after 10 trades)
+        this.addLog('ORDER', 'success', `[OPEN] الصفقة مفتوحة ونشطة بنجاح! تذكرة #${ticketId} | سعر الفتح: ${result.deal.openPrice || 'جارٍ'}`);
+
+        // Check if it's time for a Human Rest Break (after specified consecutive trades)
         if (this.consecutiveTradesCount >= this.config.tradesBeforeRest) {
           const restMins = Number((this.config.restMinMinutes + Math.random() * (this.config.restMaxMinutes - this.config.restMinMinutes)).toFixed(1));
           this.isInRestBreak = true;
           this.restBreakUntil = Date.now() + restMins * 60 * 1000;
-          this.addLog('REST', 'warn', `☕ وضع خمول المتداول: تم إنجاز ${this.consecutiveTradesCount} صفقات. استراحة شاي لمدة ${restMins} دقيقة.`);
+          this.addLog('REST', 'warn', `☕ وضع خمول المتداول: تم إنجاز ${this.consecutiveTradesCount} صفقات متتالية. استراحة شاي لمدة ${restMins} دقيقة.`);
         }
       } else {
+        this.transitionTradeState(tradeId, 'REJECTED', {
+          rejectionReason: result.error || 'رفض خادم المنصة إتمام الصفقة',
+        });
         this.addLog('ORDER', 'error', `[REJECTED] رفض تنفيذ الصفقة من المنصة: ${result.error || 'خطأ غير معروف'}`);
       }
     } catch (err: any) {
+      this.transitionTradeState(tradeId, 'FAILED', {
+        rejectionReason: err?.message || 'خطأ داخلي في مسار التنفيذ',
+      });
       this.addLog('ORDER', 'error', `[FAILED] خطأ في مسار تنفيذ الصفقة: ${err?.message || err}`);
     } finally {
       this.isExecutingTrade = false;
+      this.executionLock = false;
       this.persistState();
       this.notifyStatusChange();
     }
@@ -902,7 +1122,7 @@ export class AutoTraderEngine {
     if (!deal) return;
     const dealId = String(deal.id || deal.ticketId || '');
     if (dealId && this.processedDealIds.has(dealId)) {
-      return; // Already counted! Prevent duplicate profit or loss calculations
+      return; // Deduplication: prevent double counting PnL or repeated status broadcasts
     }
     if (dealId) {
       this.processedDealIds.add(dealId);
@@ -932,13 +1152,15 @@ export class AutoTraderEngine {
       }
     }
 
-    // Update trade record if found
-    const matchingTrade = this.trades.find((t) => t.ticketId === dealId);
+    // Update in-place: transition from OPEN/SETTLING to COMPLETED
+    const matchingTrade = this.trades.find((t) => t.ticketId === dealId || t.id === dealId);
     if (matchingTrade) {
-      matchingTrade.lifecycle = 'COMPLETED';
-      matchingTrade.status = isWin ? 'WON' : isDraw ? 'PENDING' : 'LOST';
-      matchingTrade.profit = profit;
-      matchingTrade.closePrice = deal.closePrice;
+      this.transitionTradeState(matchingTrade.id, 'SETTLING');
+      this.transitionTradeState(matchingTrade.id, 'COMPLETED', {
+        closePrice: deal.closePrice,
+        profit,
+        status: isWin ? 'WON' : isDraw ? 'DRAW' : 'LOST',
+      });
     }
 
     // Check risk limits after deal closed
@@ -955,7 +1177,6 @@ export class AutoTraderEngine {
     }
 
     this.persistState();
-    this.notifyStatusChange();
   }
 
   private addLog(

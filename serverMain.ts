@@ -104,13 +104,8 @@ async function startServer() {
       : 'DEMO';
 
   let defaultEndpoint = PocketOptionService.cleanEndpoint(
-    defaultMode === 'DEMO'
-      ? 'wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket'
-      : (process.env.PO_ENDPOINT || 'wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket')
+    process.env.PO_ENDPOINT || 'wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket'
   );
-  if (defaultMode === 'DEMO' && defaultEndpoint.includes('api-') && !defaultEndpoint.includes('demo-api-')) {
-    defaultEndpoint = defaultEndpoint.replace('api-', 'demo-api-');
-  }
 
   const poService = new PocketOptionService(
     candleBuilder,
@@ -718,7 +713,7 @@ async function startServer() {
   app.post('/api/timeframe', async (req: Request, res: Response) => {
     try {
       const rawTf = Number(req.body.timeframe);
-      const VALID_TIMEFRAMES = [5, 15, 30, 60, 300, 900, 1800, 3600];
+      const VALID_TIMEFRAMES = [5, 15, 30, 60, 120, 180, 300, 900, 1800, 3600];
       const targetTf = VALID_TIMEFRAMES.includes(rawTf) ? rawTf : (rawTf || 60);
       const activeAsset = poService.getActiveAsset();
       const tfLabel = targetTf >= 3600 ? `${Math.round(targetTf / 3600)}H` : targetTf >= 60 ? `${Math.round(targetTf / 60)}M` : `${targetTf}s`;
@@ -816,10 +811,11 @@ async function startServer() {
       const preParse = PocketOptionService.parseCredentials(effectiveSession, isDemo === true, effectiveUid ? Number(effectiveUid) : undefined);
 
       let determinedMode: AccountMode;
-      if (mode === 'REAL' || mode === 'DEMO') {
-        determinedMode = mode;
-      } else if (preParse.detectedModeFromPayload) {
+      if (preParse.detectedModeFromPayload) {
+        // If SSD token payload explicitly contains isDemo: 0 (REAL) or 1 (DEMO), payload is ground truth
         determinedMode = preParse.detectedModeFromPayload;
+      } else if (mode === 'REAL' || mode === 'DEMO') {
+        determinedMode = mode;
       } else if (isDemo !== undefined && isDemo !== null) {
         determinedMode = isDemo ? 'DEMO' : 'REAL';
       } else {
@@ -836,13 +832,32 @@ async function startServer() {
       const parsed = PocketOptionService.parseCredentials(effectiveSession, isDemoBool, effectiveUid ? Number(effectiveUid) : undefined);
       const targetUid = effectiveUid || parsed.uid;
 
-      console.log(`[PO-CONNECT] Connecting account: Mode=${determinedMode} (isDemo=${isDemoBool}), PayloadDetected=${preParse.detectedModeFromPayload || 'NONE'}, UID=${targetUid || 'auto'}`);
+      // Endpoint Routing:
+      // Pocket Option registered user sessions (both DEMO and REAL) reside on the production cluster (api-eu.po.market).
+      // demo-api-eu.po.market is only for unauthenticated guest sandboxes and rejects registered user tokens.
+      let targetEndpoint = endpoint && typeof endpoint === 'string' && endpoint.trim().length > 0
+        ? PocketOptionService.cleanEndpoint(endpoint.trim())
+        : undefined;
+
+      const isPublicGuest = !effectiveSession || effectiveSession.startsWith('po_demo_') || effectiveSession.toLowerCase() === 'demo';
+
+      if (!targetEndpoint) {
+        targetEndpoint = (isDemoBool && isPublicGuest)
+          ? 'wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket'
+          : 'wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket';
+      } else if (!isPublicGuest && targetEndpoint.includes('demo-api-')) {
+        // Automatically route registered user tokens away from demo-api-eu to api-eu.po.market
+        // to prevent connection rejections (NotAuthorized / Code 1005).
+        targetEndpoint = targetEndpoint.replace('demo-api-', 'api-');
+      }
+
+      console.log(`[PO-CONNECT] Connecting account: Mode=${determinedMode} (isDemo=${isDemoBool}), PayloadDetected=${preParse.detectedModeFromPayload || 'NONE'}, Endpoint=${targetEndpoint}, UID=${targetUid || 'auto'}`);
 
       // Execute connection with handshake and hard timeout
       const result = await poService.connectWithHandshake({
         sessionToken: effectiveSession,
         isDemo: isDemoBool,
-        endpoint: endpoint && typeof endpoint === 'string' ? endpoint : undefined,
+        endpoint: targetEndpoint,
         uid: targetUid,
         attemptId,
         timeoutMs: timeoutMs ? Number(timeoutMs) : 15000,
@@ -865,7 +880,8 @@ async function startServer() {
           connectionId: result.connectionId,
         });
       } else {
-        res.status(result.errorCode === 'AUTH_FAILED' ? 401 : result.errorCode === 'TIMEOUT' ? 408 : 502).json({
+        // Return 200 OK with clean JSON payload so reverse proxies/Cloud Run never intercept with <!doctype html> error pages
+        res.status(200).json({
           success: false,
           ok: false,
           state: result.state || 'CONNECTION_ERROR',
@@ -877,7 +893,7 @@ async function startServer() {
       }
     } catch (err: any) {
       console.error('[API] /api/account/connect error:', err);
-      res.status(500).json({
+      res.status(200).json({
         success: false,
         ok: false,
         error: err?.message || 'Internal connection error',

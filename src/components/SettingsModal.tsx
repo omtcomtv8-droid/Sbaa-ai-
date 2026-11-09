@@ -50,20 +50,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setTestingConn(true);
     setTestResult(null);
     try {
+      const effectiveEndpoint = endpoint?.trim() || 'wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket';
       const res = await fetch('/api/account/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sessionToken: session,
-          endpoint,
+          endpoint: effectiveEndpoint,
           uid,
           isDemo: demoMode,
+          mode: demoMode ? 'DEMO' : 'REAL',
           timeoutMs: 10000,
         }),
       });
-      const data = await res.json();
+      let data: any = null;
+      try {
+        const text = await res.text();
+        data = JSON.parse(text);
+      } catch {
+        data = {
+          success: false,
+          error: isRTL ? 'تعذر الاتصال بخادم Pocket Option. يرجى التأكد من اتصال الإنترنت وصحة رمز الجلسة.' : 'Pocket Option Gateway unreachable. Please check connection and session token.',
+        };
+      }
+
       setTestResult({
-        success: data.success || data.ok,
+        success: Boolean(data.success || data.ok),
         state: data.state || (data.success ? 'CONNECTED' : 'FAILED'),
         error: data.error || (data.diagnostics?.authError) || (data.diagnostics?.error),
         balance: data.balance ?? data.account?.balance,
@@ -73,7 +85,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setTestResult({
         success: false,
         state: 'FAILED',
-        error: err?.message || 'Connection error',
+        error: isRTL ? 'خطأ في شبكة الاتصال، يرجى المحاولة مرة أخرى' : (err?.message || 'Connection error'),
       });
     } finally {
       setTestingConn(false);
@@ -91,17 +103,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleSessionChange = (val: string) => {
     setSession(val);
-    if (/(?:^|[;&,\s"{])isDemo"?\s*[:=]\s*"?0"?/i.test(val) || /(?:^|[;&,\s"{])is_demo"?\s*[:=]\s*"?0"?/i.test(val)) {
-      setDemoMode(false);
-    } else if (/(?:^|[;&,\s"{])isDemo"?\s*[:=]\s*"?1"?/i.test(val) || /(?:^|[;&,\s"{])is_demo"?\s*[:=]\s*"?1"?/i.test(val)) {
-      setDemoMode(true);
-    }
-
     const uidMatch =
       val.match(/"?(?:uid|user_id)"?\s*[:=]\s*"?(\d+)"?/i) ||
       val.match(/(?:^|[;&,\s])(?:uid|user_id)\s*=\s*"?(\d+)"?/i);
-    if (uidMatch && uidMatch[1] && Number(uidMatch[1]) > 0 && !uid) {
+    if (uidMatch && uidMatch[1] && Number(uidMatch[1]) > 0) {
       setUid(uidMatch[1]);
+    }
+    const isDemoMatch = val.match(/"?(?:isDemo|is_demo)"?\s*[:=]\s*"?([01]|true|false)"?/i);
+    if (isDemoMatch) {
+      const isDemoVal = isDemoMatch[1] === '1' || isDemoMatch[1].toLowerCase() === 'true';
+      setDemoMode(isDemoVal);
     }
   };
 
@@ -199,7 +210,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={() => setDemoMode(true)}
+                    onClick={() => {
+                      setDemoMode(true);
+                      if (!endpoint || endpoint.includes('demo-api-')) {
+                        setEndpoint('wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket');
+                      }
+                    }}
                     className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
                       demoMode
                         ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 shadow-sm shadow-amber-500/20'
@@ -210,7 +226,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setDemoMode(false)}
+                    onClick={() => {
+                      setDemoMode(false);
+                      if (!endpoint || endpoint.includes('demo-api-')) {
+                        setEndpoint('wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket');
+                      }
+                    }}
                     className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
                       !demoMode
                         ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300 shadow-sm shadow-emerald-500/20'
@@ -223,9 +244,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  {isRTL ? 'نقطة نهاية الـ WebSocket' : 'WebSocket Endpoint'}
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    {isRTL ? 'نقطة نهاية الـ WebSocket (خادم الاتصال)' : 'WebSocket Endpoint'}
+                  </label>
+                  <span className="text-[10px] text-amber-400 font-mono">
+                    {endpoint.includes('api-eu') ? 'api-eu (الموصى به)' : endpoint.includes('api-us') ? 'api-us' : endpoint.includes('api-sc') ? 'api-sc' : 'demo-api'}
+                  </span>
+                </div>
                 <input
                   type="text"
                   value={endpoint}
@@ -233,6 +259,53 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   placeholder="wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket"
                   className="w-full py-2.5 px-3.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 font-mono text-xs focus:outline-none focus:border-amber-400"
                 />
+                {/* Server Quick Select Buttons */}
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setEndpoint('wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket')}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-all cursor-pointer ${
+                      endpoint.includes('api-eu.po.market')
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'
+                        : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    ⭐ api-eu (أوروبا - رئيسي)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEndpoint('wss://api-us-north.po.market/socket.io/?EIO=4&transport=websocket')}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-all cursor-pointer ${
+                      endpoint.includes('api-us-north.po.market')
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'
+                        : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    api-us-north (أمريكا)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEndpoint('wss://api-sc.po.market/socket.io/?EIO=4&transport=websocket')}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-all cursor-pointer ${
+                      endpoint.includes('api-sc.po.market')
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'
+                        : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    api-sc (سيشيل)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEndpoint('wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket')}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-all cursor-pointer ${
+                      endpoint.includes('demo-api-eu.po.market')
+                        ? 'bg-sky-500/20 text-sky-300 border-sky-500/50 font-bold'
+                        : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    demo-api (ضيوف)
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -267,10 +340,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
                 <textarea
                   rows={3}
+                  dir="ltr"
                   value={session}
                   onChange={(e) => handleSessionChange(e.target.value)}
                   placeholder="Paste session token or 42['auth', ...]"
-                  className="w-full py-2.5 px-3.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 font-mono text-xs focus:outline-none focus:border-amber-400 resize-none"
+                  className="w-full py-2.5 px-3.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 font-mono text-xs focus:outline-none focus:border-amber-400 resize-none text-left"
                 />
               </div>
 

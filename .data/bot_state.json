@@ -1,12 +1,12 @@
 {
   "config": {
-    "strategyId": "auto",
-    "baseAmount": 1000,
+    "strategyId": "confluence",
+    "baseAmount": 5,
     "maxAmount": 1000,
     "stopLoss": 20,
     "takeProfit": 40,
-    "asset": "TEST_PAIR_otc",
-    "timeframe": 1800,
+    "asset": "EURUSD_otc",
+    "timeframe": 60,
     "isDemo": true,
     "enableMartingale": false,
     "martingaleMultiplier": 2,
@@ -15,16 +15,16 @@
     "restMinMinutes": 15,
     "restMaxMinutes": 45,
     "maxConcurrentTrades": 1,
-    "cooldownBetweenTradesSec": 30,
-    "minSignalStrength": 75
+    "cooldownBetweenTradesSec": 0,
+    "minSignalStrength": 70
   },
   "isRunning": false,
   "isEmergencyStopped": false,
-  "dailyPnL": -1.1999999999999993,
-  "totalTrades": 3,
+  "dailyPnL": 8.8,
+  "totalTrades": 0,
   "winningTrades": 1,
-  "losingTrades": 1,
+  "losingTrades": 0,
   "circuitBreakerTripped": false,
   "circuitBreakerReason": "",
-  "savedAt": "2026-11-05T14:02:49.237Z"
+  "savedAt": "2026-11-08T22:05:06.662Z"
 }

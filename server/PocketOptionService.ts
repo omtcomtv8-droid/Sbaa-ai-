@@ -224,6 +224,7 @@ export class PocketOptionService {
   private socketConnected: boolean = false;
   private engineIoConnected: boolean = false;
   private socketIoConnected: boolean = false;
+  private authDemoFallbackAttempted: number | null = null;
 
   private candleBuilder: CandleBuilder;
   private assetsMap: Map<string, AssetInfo> = new Map();
@@ -430,10 +431,7 @@ export class PocketOptionService {
       effectiveToken.toLowerCase() === 'demo';
 
     if (targetMode === 'DEMO' && isPublicGuestDemo) {
-      if (ep.includes('api-') && !ep.includes('demo-api-')) {
-        ep = ep.replace('api-', 'demo-api-');
-      }
-      if (!ep.includes('demo-api') && !ep.includes('try-demo')) {
+      if (!ep || ep.includes('try-demo')) {
         ep = 'wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket';
       }
     } else {
@@ -442,7 +440,7 @@ export class PocketOptionService {
       if (ep.includes('demo-api-')) {
         ep = ep.replace('demo-api-', 'api-');
       }
-      if (ep.includes('try-demo')) {
+      if (!ep || ep.includes('try-demo')) {
         ep = 'wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket';
       }
     }
@@ -731,6 +729,10 @@ export class PocketOptionService {
       clearTimeout(this.authTimeout);
       this.authTimeout = null;
     }
+    if (this.monitorInterval) {
+      clearInterval(this.monitorInterval);
+      this.monitorInterval = null;
+    }
 
     this.cleanCurrentSocket();
     this.activeConnectionId = null;
@@ -834,12 +836,12 @@ export class PocketOptionService {
       uid,
     });
 
-    // Determine target mode: payload self-declaration takes highest precedence
+    // Determine target mode: explicit isDemo takes highest precedence
     let targetMode: AccountMode;
-    if (preParsed.detectedModeFromPayload) {
-      targetMode = preParsed.detectedModeFromPayload;
-    } else if (isDemo !== undefined && isDemo !== null) {
+    if (isDemo !== undefined && isDemo !== null) {
       targetMode = isDemo ? 'DEMO' : 'REAL';
+    } else if (preParsed.detectedModeFromPayload) {
+      targetMode = preParsed.detectedModeFromPayload;
     } else {
       targetMode = this.accountManager.getActiveMode();
     }
@@ -991,29 +993,19 @@ export class PocketOptionService {
   }
 
   public reconnectExplicit(): void {
-    if (
-      this.subsystems.auth === 'failed' ||
-      this.sessionStatus === 'expired' ||
-      this.sessionStatus === 'invalid' ||
-      this.subsystems.overall === 'AUTH_FAILED'
-    ) {
-      this.log(
-        '[AUTH] Manual reconnect halted: The current session token was rejected (NotAuthorized). Please click Update SSD to enter a fresh session.',
-        'warn'
-      );
-      this.authError =
-        'Pocket Option Authentication Rejected: The session token was rejected by the server (NotAuthorized). Update SSD in Settings to reconnect.';
-      this.notifyStatusChange();
-      return;
-    }
-
     this.isExplicitlyClosed = false;
+    this.authDemoFallbackAttempted = null;
+    this.authError = null;
+    this.sessionStatus = 'active';
+    this.subsystems.auth = 'none';
+    this.subsystems.overall = 'CONNECTING';
     this.cleanCurrentSocket();
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
     }
     this.reconnectAttempts = 0;
+    this.log('[AUTH] Manual reconnection initiated by user. Retrying connection...', 'info');
     this.connect();
   }
 
@@ -1374,6 +1366,11 @@ export class PocketOptionService {
       norm === 'autherror' ||
       norm === 'authorization_failed'
     ) {
+      // If platform auth is already verified, do not kill the socket due to minor command rejection
+      if (this.authVerified) {
+        this.log(`[PO-DEBUG] Ignoring secondary ${eventName} event since session is already verified and active.`, 'info');
+        return;
+      }
       this.handleAuthFailure(eventName, payload, connId, generation);
       return;
     }
@@ -1491,12 +1488,6 @@ export class PocketOptionService {
     this.authEventSent = true;
     this.sendPacket(validation.packet!);
 
-    // In DEMO mode, send change-account to ensure server switches to demo context
-    if (snapshot.mode === 'DEMO') {
-      this.sendPacket('42["change-account",{"isDemo":1}]');
-      this.sendPacket('42["changeAccount",{"isDemo":1}]');
-    }
-
     if (this.authTimeout) clearTimeout(this.authTimeout);
     this.authTimeout = setTimeout(() => {
       if (this.subsystems.auth === 'pending') {
@@ -1601,78 +1592,46 @@ export class PocketOptionService {
       this.processUpdateBalance(earlyBalance.payload, connId, generation);
     }
 
+    this.authDemoFallbackAttempted = null;
+
     // Request account balance through multiple canonical protocol methods
     if (this.subsystems.account !== 'LIVE') {
       this.subsystems.account = 'LOADING';
     }
-    this.sendPacket('42["update_balance"]');
+    // Request account balance using standard Pocket Option protocol only
+    if (this.subsystems.account !== 'LIVE') {
+      this.subsystems.account = 'LOADING';
+    }
+    this.sendPacket(`42["change-account",{"isDemo":${activeMode === 'DEMO' ? 1 : 0}}]`);
     this.sendPacket('42["updateBalance"]');
-    this.sendPacket(`42["change_balance",{"isDemo":${activeMode === 'DEMO' ? 1 : 0}}]`);
-    this.sendPacket(`42["changeBalance",{"isDemo":${activeMode === 'DEMO' ? 1 : 0}}]`);
-    this.sendPacket('42["ps"]');
-    this.sendPacket('42["balance"]');
-    this.sendPacket('42["getBalance"]');
-    this.sendPacket('42["get_balance"]');
     this.scheduleBalanceTimeout();
 
-    // Fast balance retry probes in case first packet was dropped or server was mid-handshake
+    // Fast balance retry probe
     setTimeout(() => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN && this.authVerified && this.accountInfo.balance === null) {
+        this.sendPacket(`42["change-account",{"isDemo":${activeMode === 'DEMO' ? 1 : 0}}]`);
         this.sendPacket('42["updateBalance"]');
-        this.sendPacket(`42["change_balance",{"isDemo":${activeMode === 'DEMO' ? 1 : 0}}]`);
-        this.sendPacket('42["update_balance"]');
-        this.sendPacket('42["ps"]');
       }
-    }, 600);
-
-    setTimeout(() => {
-      if (this.ws && this.ws.readyState === WebSocket.OPEN && this.authVerified && this.accountInfo.balance === null) {
-        this.sendPacket('42["updateBalance"]');
-        this.sendPacket(`42["change_balance",{"isDemo":${activeMode === 'DEMO' ? 1 : 0}}]`);
-        this.sendPacket('42["update_balance"]');
-        this.sendPacket('42["balance"]');
-      }
-    }, 1800);
+    }, 1200);
 
     // Subscribe to symbol price stream & candle history
     this.sendSubscriptionPackets(this.activeAsset, this.timeframe);
     this.notifyStatusChange();
 
-    // Handshake resolution strategy:
-    // If balance is already verified, resolve immediately as READY.
-    // If balance is awaiting broker push, allow 3500ms grace window for processUpdateBalance
-    // before resolving as AUTHENTICATED (never fail auth due to slow balance!).
-    if (this.accountInfo.balance !== null) {
-      this.resolveHandshakes(generation, {
-        success: true,
-        ok: true,
-        state: 'READY',
-        account: this.accountManager.buildAccountInfo(),
-        balance: this.accountInfo.balance,
-        diagnostics: this.getDiagnostics(),
-        generation,
-        connectionId: connId || this.activeConnectionId,
-        uid: detectedUid || this.authUid,
-      });
-    } else {
-      this.log(`[PO-CONNECT] Platform authenticated! Awaiting broker balance packet...`);
-      setTimeout(() => {
-        if (this.pendingHandshakes.some((h) => h.generation === generation)) {
-          this.log(`[PO-CONNECT] Balance packet grace window ended. Resolving as AUTHENTICATED (balance loading in background).`);
-          this.resolveHandshakes(generation, {
-            success: true,
-            ok: true,
-            state: this.accountInfo.balance !== null ? 'READY' : 'AUTHENTICATED',
-            account: this.accountManager.buildAccountInfo(),
-            balance: this.accountInfo.balance,
-            diagnostics: this.getDiagnostics(),
-            generation,
-            connectionId: connId || this.activeConnectionId,
-            uid: detectedUid || this.authUid,
-          });
-        }
-      }, 3500);
-    }
+    // Immediate Handshake Resolution:
+    // Once platform authentication is verified, resolve handshake immediately so UI does not time out!
+    this.resolveHandshakes(generation, {
+      success: true,
+      ok: true,
+      state: this.accountInfo.balance !== null ? 'READY' : 'AUTHENTICATED',
+      account: this.accountManager.buildAccountInfo(),
+      balance: this.accountInfo.balance,
+      accountMode: activeMode,
+      diagnostics: this.getDiagnostics(),
+      generation,
+      connectionId: connId || this.activeConnectionId,
+      uid: detectedUid || this.authUid,
+    });
   }
 
   /**
@@ -1698,6 +1657,38 @@ export class PocketOptionService {
 
     const activeMode = this.accountManager.getActiveMode();
     const activeCtx = this.accountManager.getActiveContext();
+
+    // Automatic Session Bridge Fallback for DEMO mode:
+    // If the server rejected direct DEMO (isDemo: 1) auth (e.g. session was created while in REAL mode on Pocket Option),
+    // automatically attempt session authentication with isDemo: 0 and then switch to DEMO mode upon success.
+    const norm = eventName.toLowerCase();
+    if (
+      activeMode === 'DEMO' &&
+      this.authDemoFallbackAttempted !== (generation || this.accountManager.getSessionGeneration()) &&
+      (norm === 'notauthorized' || norm === 'failauth') &&
+      this.ws &&
+      this.ws.readyState === WebSocket.OPEN
+    ) {
+      this.authDemoFallbackAttempted = generation || this.accountManager.getSessionGeneration();
+      this.log('[AUTH] Pocket Option rejected direct isDemo:1 frame. Attempting session bridge with isDemo:0, then auto-switching to DEMO...', 'info');
+
+      const bridgePacket = PocketOptionAuthManager.buildCanonicalPayload(
+        activeCtx.sessionToken,
+        'REAL',
+        activeCtx.uid,
+        activeCtx.platform
+      );
+      this.sendPacket(bridgePacket.packet);
+
+      if (this.authTimeout) clearTimeout(this.authTimeout);
+      this.authTimeout = setTimeout(() => {
+        if (this.subsystems.auth === 'pending') {
+          this.handleAuthFailure('AuthTimeout', { reason: 'Bridge auth timed out' }, connId, generation);
+        }
+      }, 10000);
+      return;
+    }
+
     const maskedSession = PocketOptionAuthManager.maskSecret(activeCtx.sessionToken);
     const maskedUid = PocketOptionAuthManager.maskUid(activeCtx.uid);
 
@@ -1864,8 +1855,8 @@ export class PocketOptionService {
         currency
       );
 
-      // Also ensure activeMode context has balance if mode aligns or only one mode is returned
-      if (targetMode === activeMode || isNaN(this.accountManager.getActiveContext().balance ?? NaN)) {
+      // Update activeMode context balance ONLY if targetMode matches activeMode
+      if (targetMode === activeMode) {
         this.accountManager.updateBalance(
           this.accountManager.getSessionGeneration(),
           activeMode,

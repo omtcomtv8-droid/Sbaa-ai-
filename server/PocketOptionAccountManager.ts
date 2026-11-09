@@ -177,10 +177,19 @@ export class PocketOptionAccountManager {
     this.contexts[prevMode].authState = 'IDLE';
     this.contexts[prevMode].connectionId = null;
 
+    // If target mode has no session token yet, inherit user's token from previous mode
+    if (!this.contexts[newMode].sessionToken && this.contexts[prevMode].sessionToken) {
+      this.contexts[newMode].sessionToken = this.contexts[prevMode].sessionToken;
+      this.contexts[newMode].uid = this.contexts[prevMode].uid;
+      this.contexts[newMode].platform = this.contexts[prevMode].platform || 9;
+    }
+
     // Active mode gets fresh generation tag and reset runtime state
+    this.contexts[newMode].isDemo = newMode === 'DEMO' ? 1 : 0;
     this.contexts[newMode].generation = this.sessionGeneration;
     this.contexts[newMode].authenticated = false;
     this.contexts[newMode].authState = 'IDLE';
+    this.contexts[newMode].authError = null;
     this.contexts[newMode].connectionId = null;
 
     return this.sessionGeneration;

@@ -130,7 +130,7 @@ class PocketOptionConnectionServiceClass {
             const parsedNum = Number(data.uid);
             if (!isNaN(parsedNum) && parsedNum > 0) targetUid = parsedNum;
           }
-          if (data.isDemo !== undefined) {
+          if (data.isDemo !== undefined && (isDemo === undefined || isDemo === null)) {
             isDemo = data.isDemo === 1 || data.isDemo === true;
           }
         }
@@ -453,7 +453,17 @@ class PocketOptionConnectionServiceClass {
           };
         }
 
-        const data = await res.json().catch(() => ({}));
+        let data: any = {};
+        try {
+          const text = await res.text();
+          data = JSON.parse(text);
+        } catch {
+          data = {
+            success: false,
+            ok: false,
+            error: 'تعذر الاتصال بخادم Pocket Option. يرجى التأكد من اتصال الإنترنت وصحة رمز الجلسة.',
+          };
+        }
 
         if (!res.ok || !data.success) {
           const errCode: POErrorCategory =

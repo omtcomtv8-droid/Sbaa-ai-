@@ -117,15 +117,29 @@ export class SbaaScoringEngine {
       }
     }
 
-    // Filter 7: Absence of clear S/R or Demand/Supply near trigger
+    // Filter 7: Absence of clear S/R or Demand/Supply near trigger (strictly for reversal setups)
     const toleranceSR = atr * 1.25;
     const isNearSupport = distToSupport <= toleranceSR;
     const isNearResistance = distToResistance <= toleranceSR;
-    if (pattern?.direction === 'BUY' && !isNearSupport && distToSupport > atr * 1.5) {
-      blockers.push('غياب منطقة دعم أو طلب صالحة قريبة تدعم إشارة الشراء.');
-    }
-    if (pattern?.direction === 'SELL' && !isNearResistance && distToResistance > atr * 1.5) {
-      blockers.push('غياب منطقة مقاومة أو عرض صالحة قريبة تدعم إشارة البيع.');
+    const isTrendOrBreakout = Boolean(
+      pattern?.type?.includes('BREAKOUT') ||
+      pattern?.type?.includes('TREND') ||
+      pattern?.type?.includes('MOMENTUM') ||
+      pattern?.type?.includes('BOS') ||
+      pattern?.type?.includes('EMA') ||
+      pattern?.type?.includes('MACD') ||
+      pattern?.type?.includes('SUPERTREND') ||
+      pattern?.type?.includes('ALIGNMENT') ||
+      pattern?.type?.includes('INTEGRATED')
+    );
+
+    if (!isTrendOrBreakout) {
+      if (pattern?.direction === 'BUY' && !isNearSupport && distToSupport > atr * 1.5) {
+        blockers.push('غياب منطقة دعم أو طلب صالحة قريبة تدعم إشارة الشراء الانعكاسية.');
+      }
+      if (pattern?.direction === 'SELL' && !isNearResistance && distToResistance > atr * 1.5) {
+        blockers.push('غياب منطقة مقاومة أو عرض صالحة قريبة تدعم إشارة البيع الانعكاسية.');
+      }
     }
 
     // =========================================================================
@@ -343,7 +357,7 @@ export class SbaaScoringEngine {
 
     // Decision Logic
     const hasBlockers = blockers.length > 0;
-    const isQualifiedForDemo = !hasBlockers && totalScore >= 80 && pattern !== null;
+    const isQualifiedForDemo = !hasBlockers && totalScore >= 75 && pattern !== null;
 
     let decision: SbaaDecision = 'WAIT';
     let primaryReasonAr = '';
@@ -355,12 +369,12 @@ export class SbaaScoringEngine {
       primaryReasonEn = `WAIT: Decision withheld due to mandatory rule: ${blockers[0]}`;
     } else if (isQualifiedForDemo && pattern) {
       decision = pattern.direction;
-      primaryReasonAr = `${decision}: تم اكتشاف ${pattern.nameAr} عند ${srZoneLabel} مع نقاط توافق ${totalScore}/100 وتأكيد الهيكل والزخم. مؤهلة للدخول التجريبي.`;
-      primaryReasonEn = `${decision}: Detected ${pattern.nameEn} near key levels with score ${totalScore}/100. Qualified for demo.`;
-    } else if (totalScore >= 70) {
+      primaryReasonAr = `${decision}: تم اكتشاف ${pattern.nameAr} عند ${srZoneLabel} مع نقاط توافق ${totalScore}/100 وتأكيد الهيكل والزخم. مؤهلة للدخول التجريبي المباشر.`;
+      primaryReasonEn = `${decision}: Detected ${pattern.nameEn} near key levels with score ${totalScore}/100. Qualified for demo execution.`;
+    } else if (totalScore >= 65) {
       decision = 'WAIT';
-      primaryReasonAr = `WAIT: إشارة فنية متوسطة (${totalScore}/100) لم تبلغ الحد الإلزامي للدخول الآلي التجريبي (80/100). للمراقبة فقط.`;
-      primaryReasonEn = `WAIT: Moderate signal score (${totalScore}/100) below minimum demo threshold (80/100). Watch only.`;
+      primaryReasonAr = `WAIT: إشارة فنية متوسطة (${totalScore}/100) لم تبلغ الحد الإلزامي للدخول الآلي (75/100). للمراقبة فقط.`;
+      primaryReasonEn = `WAIT: Moderate signal score (${totalScore}/100) below minimum threshold (75/100). Watch only.`;
     } else {
       decision = 'WAIT';
       primaryReasonAr = 'WAIT: لا يوجد نموذج فني مكتمل أو أن السوق في حالة تذبذب وتردد.';

@@ -58,7 +58,8 @@ export type SbaaPatternType =
   | 'RSI_DIVERGENCE_BULLISH'
   | 'RSI_DIVERGENCE_BEARISH'
   | 'PULLBACK_CONTINUATION_BUY'
-  | 'PULLBACK_CONTINUATION_SELL';
+  | 'PULLBACK_CONTINUATION_SELL'
+  | (string & {});
 
 export interface SbaaDetectedPattern {
   type: SbaaPatternType;

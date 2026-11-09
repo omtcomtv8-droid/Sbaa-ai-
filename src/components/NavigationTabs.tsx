@@ -115,17 +115,7 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({
         </span>
       ),
     },
-    {
-      id: 'sbaa',
-      label: isRTL ? '⚡ استراتيجية سبع الذكية' : '⚡ SBAA Strategy Engine',
-      sublabel: isRTL ? 'تحليل الشموع والدخول الآلي' : 'Price Action & Auto Demo',
-      icon: <Zap className="w-4 h-4 text-amber-400" />,
-      badge: (
-        <span className="text-[9px] px-1.5 py-0.5 rounded font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-          PRO
-        </span>
-      ),
-    },
+
     {
       id: 'autotrader',
       label: isRTL ? '🤖 بوت التداول الآلي' : '🤖 AI Auto Trader',

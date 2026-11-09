@@ -38,19 +38,22 @@ export class PocketOptionAuthManager {
     // Strip surrounding quotes or backticks
     raw = raw.replace(/^["'`]|["'`]$/g, '').trim();
 
-    let session = raw;
+    let session = '';
     let uid = 0;
-    let platform = input.platform !== undefined ? Number(input.platform) : 2;
+    let platform = input.platform !== undefined ? Number(input.platform) : 9;
     let detectedIsDemo: 0 | 1 | null = null;
     let format: SessionFormatType = 'RAW_SESSION';
 
-    if (raw.startsWith('42') || raw.startsWith('{') || raw.startsWith('[')) {
-      format = 'COMPLETE_AUTH_PACKET';
+    // 1. Try to extract JSON object or array substring if raw contains { ... } or [ ... ]
+    const jsonMatch = raw.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+    if (jsonMatch) {
       try {
-        const jsonStr = raw.startsWith('42') ? raw.slice(2) : raw;
+        let jsonStr = jsonMatch[1];
+        if (jsonStr.startsWith('42')) jsonStr = jsonStr.slice(2);
         const parsed = JSON.parse(jsonStr);
-        const data = Array.isArray(parsed) && parsed.length > 1 ? parsed[1] : parsed;
+        const data = Array.isArray(parsed) && parsed.length > 1 && typeof parsed[1] === 'object' ? parsed[1] : parsed;
         if (data && typeof data === 'object') {
+          format = 'COMPLETE_AUTH_PACKET';
           if (data.session) {
             session = String(data.session).trim().replace(/^["'`]|["'`]$/g, '');
           }
@@ -61,34 +64,68 @@ export class PocketOptionAuthManager {
           if (data.platform !== undefined) {
             const numPlatform = Number(data.platform);
             if (!isNaN(numPlatform)) platform = numPlatform;
-          } else {
-            // Default to platform 9 (Web) instead of 2 (Android) when not specified
-            platform = 9;
           }
           if (data.isDemo !== undefined && data.isDemo !== null) {
             detectedIsDemo = (data.isDemo === 1 || data.isDemo === '1' || data.isDemo === true) ? 1 : 0;
           }
         }
-      } catch {}
-    } else if (raw.includes('SSID=') || raw.includes('session=') || raw.includes('auth=') || raw.includes(';')) {
-      format = 'RAW_SESSION';
-      const match = raw.match(/(?:SSID|session|auth|PHPSESSID)=([^;\s]+)/i);
-      if (match) {
-        session = match[1].replace(/^["'`]|["'`]$/g, '').trim();
+      } catch {
+        // Fall through to regex extraction below if JSON was malformed or partial
       }
     }
 
-    // Secondary check for isDemo flag inside the string (e.g. cookies or messy JSON)
+    // 2. Robust regex extraction for session token (handles inverted DevTools copies like `auth", "]42{"session":"..."}`)
+    if (!session || session.length < 8) {
+      const sessionRegex = /"?session"?\s*[:=]\s*["']?([a-zA-Z0-9_\.-]{8,128})["']?/i;
+      const sMatch = raw.match(sessionRegex);
+      if (sMatch && sMatch[1]) {
+        session = sMatch[1].trim();
+        format = 'COMPLETE_AUTH_PACKET';
+      } else {
+        const cookieMatch = raw.match(/(?:SSID|PHPSESSID|auth|token)\s*=\s*["']?([a-zA-Z0-9_\.-]{8,128})["']?/i);
+        if (cookieMatch && cookieMatch[1]) {
+          session = cookieMatch[1].trim();
+          format = 'RAW_SESSION';
+        } else if (!raw.includes('{') && !raw.includes(':') && !raw.includes('[')) {
+          // It's a plain raw token string
+          session = raw.replace(/^(?:SSID|session|auth|PHPSESSID)=/i, '').replace(/[;\s]+$/, '').trim();
+          format = 'RAW_SESSION';
+        } else {
+          // Last resort fallback: clean residual quotes and punctuation
+          session = raw.replace(/^(?:SSID|session|auth|PHPSESSID)=/i, '').replace(/[;\s]+$/, '').replace(/^["'`]|["'`]$/g, '').trim();
+        }
+      }
+    }
+
+    // 3. Robust regex fallback for UID
+    if (uid === 0) {
+      const uidRegex = /"?(?:uid|user_id)"?\s*[:=]\s*"?(\d+)"?/i;
+      const uMatch = raw.match(uidRegex) || raw.match(/(?:^|[;&,\s])(?:uid|user_id)\s*=\s*"?(\d+)"?/i);
+      if (uMatch && uMatch[1]) {
+        const num = Number(uMatch[1]);
+        if (!isNaN(num) && num > 0) uid = num;
+      }
+    }
+
+    // 4. Robust regex fallback for platform
+    const platformRegex = /"?platform"?\s*[:=]\s*"?(\d+)"?/i;
+    const pMatch = raw.match(platformRegex);
+    if (pMatch && pMatch[1]) {
+      const num = Number(pMatch[1]);
+      if (!isNaN(num) && num > 0) platform = num;
+    }
+
+    // 5. Robust regex fallback for isDemo flag
     if (detectedIsDemo === null) {
-      if (/(?:^|[;&,\s"{])isDemo"?\s*[:=]\s*"?0"?/i.test(raw) || /(?:^|[;&,\s"{])is_demo"?\s*[:=]\s*"?0"?/i.test(raw)) {
-        detectedIsDemo = 0;
-      } else if (/(?:^|[;&,\s"{])isDemo"?\s*[:=]\s*"?1"?/i.test(raw) || /(?:^|[;&,\s"{])is_demo"?\s*[:=]\s*"?1"?/i.test(raw)) {
-        detectedIsDemo = 1;
+      const demoRegex = /"?(?:isDemo|is_demo)"?\s*[:=]\s*"?([01]|true|false)"?/i;
+      const dMatch = raw.match(demoRegex);
+      if (dMatch && dMatch[1]) {
+        detectedIsDemo = (dMatch[1] === '1' || dMatch[1].toLowerCase() === 'true') ? 1 : 0;
       }
     }
 
-    // Clean any residual cookie prefix or semicolons
-    session = session.replace(/^(?:SSID|session|auth|PHPSESSID)=/i, '').replace(/[;\s]+$/, '').replace(/^["'`]|["'`]$/g, '').trim();
+    // Clean any residual punctuation or trailing garbage from session
+    session = session.replace(/^["'`]|["'`]$/g, '').trim();
 
     // Priority: explicit input.uid overrides parsed uid
     if (input.uid !== undefined && input.uid !== null && String(input.uid).trim() !== '') {
@@ -100,10 +137,10 @@ export class PocketOptionAuthManager {
     }
 
     // Determine final isDemo:
-    // Highest priority: If detectedIsDemo from SSID payload is found (e.g. {"isDemo":1}), respect it unconditionally!
-    // Next priority: If expectedMode was explicitly provided, use it.
-    // Next priority: If input.isDemo was explicitly passed, use it.
-    // Fallback: Safe Demo mode (1).
+    // Highest priority: If detectedIsDemo from SSID payload is found (e.g. isDemo: 0 in real account frame)
+    // Next priority: User's explicitly requested expectedMode
+    // Next priority: Explicit isDemo flag from caller
+    // Fallback: Default to DEMO mode (1)
     let isDemo: 0 | 1 = 1;
     if (detectedIsDemo !== null) {
       isDemo = detectedIsDemo;
@@ -180,9 +217,13 @@ export class PocketOptionAuthManager {
       isDemo,
       uid: cleanUid,
       platform: cleanPlatform,
-      isFastHistory: extraOptions?.isFastHistory ?? true,
-      isOptimized: extraOptions?.isOptimized ?? true,
     };
+    if (extraOptions?.isFastHistory !== undefined) {
+      authObject.isFastHistory = extraOptions.isFastHistory;
+    }
+    if (extraOptions?.isOptimized !== undefined) {
+      authObject.isOptimized = extraOptions.isOptimized;
+    }
 
     const payload = ['auth', authObject];
     const maskedObject = {

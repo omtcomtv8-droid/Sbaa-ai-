@@ -83,6 +83,11 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
     configuredUid ? String(configuredUid) : diagnostics?.account.uid ? String(diagnostics.account.uid) : ''
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [targetEndpoint, setTargetEndpoint] = useState<string>(
+    diagnostics?.endpoint && diagnostics.endpoint.startsWith('wss://')
+      ? diagnostics.endpoint
+      : 'wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket'
+  );
   const [connectError, setConnectError] = useState<string | null>(null);
   const [showSessionSecret, setShowSessionSecret] = useState(false);
   const [showQuickHelp, setShowHelp] = useState(false);
@@ -103,13 +108,14 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
   });
 
   const cardRef = useRef<HTMLDivElement>(null);
+  const userModeExplicitRef = useRef<boolean>(false);
 
-  // Sync state if external props change
+  // Sync state if external props change without overriding manual mode selection
   useEffect(() => {
     if (configuredSession && !sessionToken) {
       setSessionToken(configuredSession);
     }
-    if (configuredIsDemo !== undefined) {
+    if (configuredIsDemo !== undefined && !userModeExplicitRef.current) {
       setMode(configuredIsDemo ? 'DEMO' : 'REAL');
     }
     if (configuredUid && !uid) {
@@ -324,17 +330,10 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
     };
   }, [sessionToken, uid, mode]);
 
-  // Auto-fill UID and Mode if detected from session packet
+  // Auto-fill UID if present without altering user selected mode
   const handleSessionChange = (val: string) => {
     setSessionToken(val);
     setConnectError(null);
-
-    // Auto-detect isDemo from typed/pasted text
-    if (/(?:^|[;&,\s"{])isDemo"?\s*[:=]\s*"?0"?/i.test(val) || /(?:^|[;&,\s"{])is_demo"?\s*[:=]\s*"?0"?/i.test(val)) {
-      setMode('REAL');
-    } else if (/(?:^|[;&,\s"{])isDemo"?\s*[:=]\s*"?1"?/i.test(val) || /(?:^|[;&,\s"{])is_demo"?\s*[:=]\s*"?1"?/i.test(val)) {
-      setMode('DEMO');
-    }
 
     // Auto-detect UID from DevTools packet or JSON: "uid": 1234567 or uid=1234567
     const uidMatch =
@@ -348,6 +347,7 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
   // 3. Quick Demo Fill Helper
   const handleFillDemo = () => {
     setMode('DEMO');
+    setTargetEndpoint('wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket');
     setSessionToken(configuredSession && configuredIsDemo ? configuredSession : '296a5cb3321a6c66c7ab018b8a596b8b');
     setUid(configuredUid ? String(configuredUid) : '98148605');
     setConnectError(null);
@@ -402,6 +402,7 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
           sessionToken: parsedPreview.cleanSession,
           isDemo: isDemoBool,
           uid: parsedUidNum,
+          endpoint: targetEndpoint,
         });
         res = {
           ok: out.success,
@@ -413,6 +414,7 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
           sessionToken: parsedPreview.cleanSession,
           isDemo: isDemoBool,
           uid: parsedUidNum,
+          endpoint: targetEndpoint,
         });
         res = {
           ok: out.ok,
@@ -542,7 +544,7 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
       </div>
 
       {/* Warning Notice if user tried to enter before filling / connecting */}
-      {connectError && (
+      {connectError && !diagnostics?.authVerified && !poSession.authenticated && (
         <div className={`p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2 ${isRTL ? 'text-right' : 'text-left'}`}>
           <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
           <div className="flex-1 space-y-1.5">
@@ -813,7 +815,10 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
               {/* DEMO CARD */}
               <button
                 type="button"
-                onClick={() => setMode('DEMO')}
+                onClick={() => {
+                  userModeExplicitRef.current = true;
+                  setMode('DEMO');
+                }}
                 className={`p-3 rounded-xl border text-right transition-all flex flex-col justify-between cursor-pointer relative overflow-hidden ${
                   mode === 'DEMO'
                     ? 'bg-sky-500/15 border-sky-500 text-sky-200 ring-2 ring-sky-500/30 shadow-lg shadow-sky-500/10'
@@ -842,7 +847,10 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
               {/* REAL CARD */}
               <button
                 type="button"
-                onClick={() => setMode('REAL')}
+                onClick={() => {
+                  userModeExplicitRef.current = true;
+                  setMode('REAL');
+                }}
                 className={`p-3 rounded-xl border text-right transition-all flex flex-col justify-between cursor-pointer relative overflow-hidden ${
                   mode === 'REAL'
                     ? 'bg-emerald-500/15 border-emerald-500 text-emerald-200 ring-2 ring-emerald-500/30 shadow-lg shadow-emerald-500/10'
@@ -915,9 +923,62 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
               </div>
               <div className="flex items-center justify-between text-slate-400">
                 <span>{tDynamic('السيرفر المستهدف:')}</span>
-                <span className={mode === 'REAL' ? 'text-emerald-400 font-bold' : 'text-sky-400 font-bold'}>
-                  {mode === 'REAL' ? 'api-eu.po.market (خادم حقيقي)' : 'demo-api-eu.po.market (خادم تجريبي)'}
+                <span className="text-amber-400 font-bold font-mono">
+                  {targetEndpoint.includes('api-eu')
+                    ? 'api-eu.po.market (رئيسي موصى به)'
+                    : targetEndpoint.includes('api-us')
+                    ? 'api-us-north.po.market (أمريكا)'
+                    : targetEndpoint.includes('api-sc')
+                    ? 'api-sc.po.market (سيشيل)'
+                    : 'demo-api-eu.po.market (خادم ضيوف)'}
                 </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 pt-1 pb-0.5">
+                <span className="text-slate-500 text-[9px]">{tDynamic('تبديل السيرفر:')}</span>
+                <button
+                  type="button"
+                  onClick={() => setTargetEndpoint('wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket')}
+                  className={`px-2 py-0.5 rounded text-[9px] font-mono border transition-all cursor-pointer ${
+                    targetEndpoint.includes('api-eu.po.market')
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  ⭐ api-eu (موصى به)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTargetEndpoint('wss://api-us-north.po.market/socket.io/?EIO=4&transport=websocket')}
+                  className={`px-2 py-0.5 rounded text-[9px] font-mono border transition-all cursor-pointer ${
+                    targetEndpoint.includes('api-us-north.po.market')
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  api-us-north
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTargetEndpoint('wss://api-sc.po.market/socket.io/?EIO=4&transport=websocket')}
+                  className={`px-2 py-0.5 rounded text-[9px] font-mono border transition-all cursor-pointer ${
+                    targetEndpoint.includes('api-sc.po.market')
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  api-sc
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTargetEndpoint('wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket')}
+                  className={`px-2 py-0.5 rounded text-[9px] font-mono border transition-all cursor-pointer ${
+                    targetEndpoint.includes('demo-api-eu.po.market')
+                      ? 'bg-sky-500/20 text-sky-300 border-sky-500/50 font-bold'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  demo-api
+                </button>
               </div>
               <div className="flex items-center justify-between pt-0.5">
                 <span className="text-slate-400">{tDynamic('حالة التحقق المبدئي:')}</span>

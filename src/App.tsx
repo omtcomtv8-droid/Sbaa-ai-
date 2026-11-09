@@ -993,9 +993,7 @@ export default function App() {
     try {
       setIsReconnecting(true);
       const targetEndpoint =
-        params.endpoint ||
-        diagnostics?.endpoint ||
-        'wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket';
+        params.endpoint || 'wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket';
 
       const res = await pocketOptionConnectionService.connect({
         endpoint: targetEndpoint,
@@ -1645,7 +1643,7 @@ export default function App() {
                 <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
                   <div className="text-slate-500 text-[11px] font-sans">Endpoint Host</div>
                   <div className="text-slate-200 font-bold break-all">
-                    {diagnostics?.endpoint || 'demo-api-eu.po.market'}
+                    {diagnostics?.endpoint || 'api-eu.po.market'}
                   </div>
                 </div>
                 <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
@@ -1917,12 +1915,13 @@ export default function App() {
           />
         )}
 
-        {/* VIEW: SBAA SMART STRATEGY ENGINE */}
+        {/* VIEW: SBAA INTEGRATED IN AUTO-TRADER */}
         {activeTab === 'sbaa' && (
-          <SbaaStrategyView
-            activeAsset={selectedAsset}
-            timeframe={selectedTimeframe}
-            currentPrice={currentPrice || 0}
+          <AutoTraderView
+            currentAsset={selectedAsset}
+            currentTimeframe={selectedTimeframe}
+            accountBalance={diagnostics?.account?.balance ?? null}
+            isDemoAccount={diagnostics?.account?.isDemo ?? true}
           />
         )}
 

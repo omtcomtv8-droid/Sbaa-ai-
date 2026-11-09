@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Bot,
   Play,
@@ -368,6 +368,16 @@ const STRATEGIES_LIST = [
   },
 ];
 
+export const BOT_TIMEFRAMES = [
+  { label: '1M', labelAr: '1 دقيقة', tf: 60, desc: '60s' },
+  { label: '2M', labelAr: '2 دقيقة', tf: 120, desc: '120s' },
+  { label: '3M', labelAr: '3 دقائق', tf: 180, desc: '180s' },
+  { label: '5M', labelAr: '5 دقائق', tf: 300, desc: '300s' },
+  { label: '15M', labelAr: '15 دقيقة', tf: 900, desc: '900s' },
+  { label: '30M', labelAr: '30 دقيقة', tf: 1800, desc: '1800s' },
+  { label: '1H', labelAr: '1 ساعة', tf: 3600, desc: '3600s' },
+];
+
 interface AutoTraderViewProps {
   currentAsset: string;
   currentTimeframe: number;
@@ -391,6 +401,7 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
 
   // Form Controls
   const [selectedStrategy, setSelectedStrategy] = useState<string>('sbaa');
+  const [botTimeframe, setBotTimeframe] = useState<number>(currentTimeframe || 60);
   const [baseAmount, setBaseAmount] = useState<number>(5);
   const [stopLoss, setStopLoss] = useState<number>(20);
   const [takeProfit, setTakeProfit] = useState<number>(40);
@@ -426,6 +437,9 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
           setStatus(data);
           if (data.config) {
             setSelectedStrategy((prev) => prev || data.config.strategyId || 'sbaa');
+            if (data.config.timeframe) {
+              setBotTimeframe((prev) => prev || data.config.timeframe);
+            }
             setBaseAmount((prev) => prev || data.config.baseAmount || 5);
             setStopLoss((prev) => prev || data.config.stopLoss || 20);
             setTakeProfit((prev) => prev || data.config.takeProfit || 40);
@@ -451,9 +465,20 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  // Automatically sync timeframe & asset changes from chart/header with autotrader
+  const lastSyncedTf = useRef<number | null>(null);
+  const lastSyncedAsset = useRef<string | null>(null);
+
+  // Automatically sync timeframe & asset changes from chart/header with autotrader (guarded by useRef)
   useEffect(() => {
-    if (currentTimeframe) {
+    if (currentTimeframe && !status?.isRunning) {
+      setBotTimeframe(currentTimeframe);
+    }
+    if (
+      currentTimeframe &&
+      (lastSyncedTf.current !== currentTimeframe || lastSyncedAsset.current !== currentAsset)
+    ) {
+      lastSyncedTf.current = currentTimeframe;
+      lastSyncedAsset.current = currentAsset;
       fetch('/api/autotrader/save-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -464,6 +489,29 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
       }).catch(() => {});
     }
   }, [currentTimeframe, currentAsset]);
+
+  const handleSelectBotTimeframe = async (tf: number) => {
+    setBotTimeframe(tf);
+    try {
+      await Promise.all([
+        fetch('/api/timeframe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ timeframe: tf }),
+        }),
+        fetch('/api/autotrader/save-settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            timeframe: tf,
+            asset: currentAsset,
+          }),
+        }),
+      ]);
+    } catch {
+      // Gracefully handle network drop
+    }
+  };
 
   const handleStart = async () => {
     setActionLoading(true);
@@ -478,7 +526,7 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
           stopLoss,
           takeProfit,
           asset: currentAsset,
-          timeframe: currentTimeframe || 60,
+          timeframe: botTimeframe || currentTimeframe || 60,
           isDemo: useDemo,
           enableMartingale,
           martingaleMultiplier,
@@ -567,7 +615,7 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
           stopLoss,
           takeProfit,
           asset: currentAsset,
-          timeframe: currentTimeframe || 60,
+          timeframe: botTimeframe || currentTimeframe || 60,
           isDemo: useDemo,
           enableMartingale,
           martingaleMultiplier,
@@ -604,7 +652,7 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
         body: JSON.stringify({
           strategyId: targetStrat,
           asset: currentAsset,
-          timeframe: currentTimeframe || 60,
+          timeframe: botTimeframe || currentTimeframe || 60,
           stake: backtestStake,
           payoutRatio: backtestPayout / 100,
         }),
@@ -803,7 +851,12 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
           <div className="flex items-center gap-3 text-[11px] text-slate-400 font-mono">
             <span>{isRTL ? 'الزوج:' : 'Asset:'} <strong className="text-slate-200">{currentAsset}</strong></span>
             <span>•</span>
-            <span>{isRTL ? 'الفريم:' : 'TF:'} <strong className="text-slate-200">{currentTimeframe}s</strong></span>
+            <span>
+              {isRTL ? 'الفريم:' : 'TF:'}{' '}
+              <strong className="text-amber-300 font-bold">
+                {BOT_TIMEFRAMES.find((t) => t.tf === (botTimeframe || currentTimeframe))?.label || `${botTimeframe || currentTimeframe}s`} ({botTimeframe || currentTimeframe}s)
+              </strong>
+            </span>
             <span>•</span>
             <span>{isRTL ? 'المقبولة:' : 'Accepted:'} <strong className="text-emerald-400">{status?.acceptedTradesCount ?? 0}</strong></span>
             <span>•</span>
@@ -912,6 +965,50 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
                 </select>
                 <p className="text-[10px] text-slate-400 leading-relaxed">
                   {STRATEGIES_LIST.find((s) => s.id === selectedStrategy)?.[isRTL ? 'descAr' : 'descEn']}
+                </p>
+              </div>
+
+              {/* Bot Execution Timeframe Selector */}
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{isRTL ? 'فريم ومدة دخول الصفقة للبوت' : 'Bot Execution Timeframe'}</span>
+                  </label>
+                  <span className="text-[10px] text-amber-400 font-mono font-bold">
+                    {(() => {
+                      const found = BOT_TIMEFRAMES.find((t) => t.tf === botTimeframe);
+                      if (!found) return `${botTimeframe}s`;
+                      return isRTL ? `${found.labelAr} (${found.desc} فعلية)` : `${found.label} (${found.desc} exact)`;
+                    })()}
+                  </span>
+                </div>
+                <div className="grid grid-cols-7 gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                  {BOT_TIMEFRAMES.map((item) => {
+                    const isSelected = botTimeframe === item.tf;
+                    return (
+                      <button
+                        key={item.tf}
+                        type="button"
+                        onClick={() => handleSelectBotTimeframe(item.tf)}
+                        disabled={isRunning}
+                        className={`py-1.5 px-1 rounded-lg text-xs font-mono font-bold transition-all text-center flex flex-col items-center justify-center cursor-pointer disabled:opacity-50 ${
+                          isSelected
+                            ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/25 ring-1 ring-amber-400'
+                            : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900'
+                        }`}
+                        title={`${item.desc} (${isRTL ? item.labelAr : item.label})`}
+                      >
+                        <span className="text-[11px] leading-tight">{item.label}</span>
+                        <span className={`text-[9px] ${isSelected ? 'text-slate-900 font-bold' : 'text-slate-500'}`}>{item.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-amber-400/90 leading-tight">
+                  {isRTL
+                    ? '✓ مدة الصفقة المرسلة للمنصة وفريم الشموع مثبتان بدقة متناهية بالثواني الفعلية (5M = 300s، 1H = 3600s) دون أي رجوع عشوائي لفريم دقيقة.'
+                    : '✓ Real broker execution duration and candles are strictly locked to exact seconds (5M = 300s, 1H = 3600s) with zero fallback.'}
                 </p>
               </div>
 

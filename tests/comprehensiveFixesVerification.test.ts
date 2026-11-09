@@ -210,6 +210,37 @@ async function runComprehensiveTests() {
   poService.subscribeAsset('EURUSD_otc', 900);
   assert(poService.getTimeframe() === 900, '15M Timeframe synchronized (900s)');
 
+  // ==============================================================
+  // PROBLEM 6: Server Endpoint Routing & Switching Verification
+  // ==============================================================
+  console.log('\n[PROBLEM 6: SERVER ENDPOINT ROUTING & SWITCHING]');
+
+  // Registered session token with isDemo: 1 must route to api-eu.po.market (not demo-api-eu)
+  const registeredDemoEp = poService.getEffectiveEndpoint('DEMO', testSSID);
+  assert(
+    registeredDemoEp.includes('api-eu.po.market') && !registeredDemoEp.includes('demo-api-eu'),
+    'Registered DEMO account correctly routes to api-eu.po.market production cluster'
+  );
+  console.log('  ✓ [PASS] Registered DEMO account correctly routes to api-eu.po.market');
+
+  // Custom user-selected endpoint (e.g. api-us-north) is respected
+  (poService as any).endpoint = 'wss://api-us-north.po.market/socket.io/?EIO=4&transport=websocket';
+  const customEp = poService.getEffectiveEndpoint('DEMO', testSSID);
+  assert(
+    customEp.includes('api-us-north.po.market'),
+    'Custom endpoint api-us-north.po.market is honored for DEMO account'
+  );
+  console.log('  ✓ [PASS] Custom endpoint api-us-north.po.market is honored');
+
+  // Guest demo token (po_demo_...) without registered session can use demo-api-eu
+  (poService as any).endpoint = 'wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket';
+  const guestEp = poService.getEffectiveEndpoint('DEMO', 'po_demo_guest_session');
+  assert(
+    guestEp.includes('demo-api-eu.po.market'),
+    'Guest sandbox session retains demo-api-eu.po.market'
+  );
+  console.log('  ✓ [PASS] Guest sandbox session retains demo-api-eu.po.market');
+
   console.log('\n=====================================================================');
   console.log('✓✓✓ ALL COMPREHENSIVE VERIFICATION TESTS PASSED SUCCESSFULLY! ✓✓✓');
   console.log('=====================================================================\n');

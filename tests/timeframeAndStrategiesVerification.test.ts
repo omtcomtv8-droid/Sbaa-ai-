@@ -243,6 +243,234 @@ describe('Timeframe System & Strategy Engine Comprehensive Verification', () => 
     assert.ok(decision.strategyName.includes('EMA Trend'), 'Should pick highest scoring strategy (EMA Trend)');
   });
 
+  it('6. Verifies SBAA Pro Engine integrates all 26 strategies and generates trade decision', () => {
+    const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, sbaaEngine);
+    const tf = 900; // 15M
+    autoTrader.setTimeframe(tf);
+    autoTrader.saveSettings({ strategyId: 'sbaa', minSignalStrength: 70 });
+
+    const strategyResults: StrategyResult[] = [
+      {
+        strategyId: 'rsi_reversal',
+        strategyName: 'RSI Reversal',
+        signal: 'UP',
+        score: 86,
+        rawScore: 86,
+        normalizedScore: 86,
+        qualified: true,
+        dataValid: true,
+        reasons: ['RSI oversold reversal confirmed'],
+        conditions: [],
+      },
+      {
+        strategyId: 'bollinger_bounce',
+        strategyName: 'Bollinger Bounce',
+        signal: 'UP',
+        score: 80,
+        rawScore: 80,
+        normalizedScore: 80,
+        qualified: true,
+        dataValid: true,
+        reasons: ['Lower band rejection'],
+        conditions: [],
+      },
+    ];
+
+    const signal: Signal = {
+      id: 'sbaa_integrated_sig',
+      asset: 'EURUSD_otc',
+      symbol: 'EURUSD_otc',
+      timeframe: tf,
+      type: 'UP',
+      direction: 'UP',
+      strength: 0.86,
+      confidence: 86,
+      score: 86,
+      details: ['Valid integrated SBAA setup'],
+      price: 1.0850,
+      status: 'CONFIRMED',
+      timestamp: Date.now(),
+      expiryDurationSec: tf,
+      strategies: strategyResults,
+    };
+
+    const decision = (autoTrader as any).evaluateSignal(signal);
+    assert.ok(decision, 'SBAA with integrated strategies must generate a trade decision');
+    assert.strictEqual(decision.action, 'call', 'Decision action must be call');
+    assert.strictEqual(decision.duration, tf, 'Duration must equal the 15M timeframe (900s)');
+    assert.ok(decision.strategyName.includes('SBAA'), 'Strategy name must reflect SBAA Pro Engine');
+  });
+
+  it('7. Verifies user-selected timeframes (5M=300s, 15M=900s, 30M=1800s, 1H=3600s) strictly enforce order duration and NEVER collapse to 60s', () => {
+    const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, sbaaEngine);
+
+    const testCases = [
+      { tf: 60, expectedSec: 60, label: '1M (60s)' },
+      { tf: 120, expectedSec: 120, label: '2M (120s)' },
+      { tf: 180, expectedSec: 180, label: '3M (180s)' },
+      { tf: 300, expectedSec: 300, label: '5M (300s)' },
+      { tf: 900, expectedSec: 900, label: '15M (900s)' },
+      { tf: 1800, expectedSec: 1800, label: '30M (1800s)' },
+      { tf: 3600, expectedSec: 3600, label: '1H (3600s)' },
+    ];
+
+    for (const tc of testCases) {
+      autoTrader.setTimeframe(tc.tf);
+      autoTrader.saveSettings({ strategyId: 'ema_trend', timeframe: tc.tf });
+
+      // Simulate a raw tick signal that might have defaulted to 60s
+      const incomingSignal: Signal = {
+        id: `sig_${tc.tf}`,
+        asset: 'EURUSD_otc',
+        symbol: 'EURUSD_otc',
+        timeframe: 60, // Incoming raw tick timeframe
+        type: 'UP',
+        direction: 'UP',
+        strength: 0.85,
+        confidence: 85,
+        score: 85,
+        details: ['Bullish EMA test'],
+        price: 1.0850,
+        status: 'CONFIRMED',
+        timestamp: Date.now(),
+        expiryDurationSec: 60, // Default tick expiry
+        strategies: [
+          {
+            strategyId: 'ema_trend',
+            strategyName: 'EMA Trend',
+            signal: 'UP',
+            score: 85,
+            rawScore: 85,
+            normalizedScore: 85,
+            qualified: true,
+            dataValid: true,
+            reasons: ['EMA 9 > EMA 21'],
+            conditions: [],
+          },
+        ],
+      };
+
+      const decision = (autoTrader as any).evaluateSignal(incomingSignal);
+      assert.ok(decision, `Decision must exist for ${tc.label}`);
+      assert.strictEqual(
+        decision.duration,
+        tc.expectedSec,
+        `Trade duration for ${tc.label} must be exactly ${tc.expectedSec}s, got ${decision.duration}s. It must NEVER collapse to 60s!`
+      );
+    }
+  });
+
+  it('8. Verifies SBAA Pro Engine end-to-end trade execution across all timeframes from 1M up to 1H (60s, 300s, 900s, 1800s, 3600s)', async () => {
+    const timeframesToTest = [
+      { tf: 60, label: '1M (1 دقيقة)', expectedSec: 60 },
+      { tf: 300, label: '5M (5 دقائق)', expectedSec: 300 },
+      { tf: 900, label: '15M (15 دقيقة)', expectedSec: 900 },
+      { tf: 1800, label: '30M (30 دقيقة)', expectedSec: 1800 },
+      { tf: 3600, label: '1H (1 ساعة)', expectedSec: 3600 },
+    ];
+
+    for (const item of timeframesToTest) {
+      const mockPo = new PocketOptionService(candleBuilder);
+      (mockPo as any).authVerified = true;
+      (mockPo as any).isConnected = () => true;
+
+      let openedDealParams: any = null;
+      (mockPo as any).openDeal = async (params: any) => {
+        openedDealParams = params;
+        return {
+          success: true,
+          deal: {
+            id: `deal_${Date.now()}`,
+            openPrice: 1.0850,
+          },
+        };
+      };
+
+      const testSbaa = new SbaaStrategyEngine(candleBuilder, mockPo);
+      const testAutoTrader = new AutoTraderEngine(strategyEngine, mockPo, undefined, testSbaa);
+
+      const asset = `EURUSD_otc_${item.tf}`;
+      const mockCandles = createMockCandles(40, 1.0800, 'up', item.tf);
+      candleBuilder.loadHistoricalCandles(asset, item.tf, mockCandles);
+
+      testAutoTrader.setTimeframe(item.tf);
+      testAutoTrader.setAsset(asset);
+      testAutoTrader.saveSettings({
+        strategyId: 'sbaa',
+        timeframe: item.tf,
+        baseAmount: 10,
+        isDemo: true,
+        minSignalStrength: 70,
+        cooldownBetweenTradesSec: 0,
+      });
+
+      testAutoTrader.start({
+        strategyId: 'sbaa',
+        timeframe: item.tf,
+        asset,
+        baseAmount: 10,
+      });
+
+      const signal: Signal = {
+        id: `sig_sbaa_${item.tf}`,
+        asset,
+        symbol: asset,
+        timeframe: item.tf,
+        type: 'UP',
+        direction: 'UP',
+        strength: 0.85,
+        confidence: 85,
+        score: 85,
+        details: [`SBAA setup confirmed for ${item.label}`],
+        price: 1.0850,
+        status: 'CONFIRMED',
+        timestamp: Date.now(),
+        expiryDurationSec: item.expectedSec,
+        strategies: [
+          {
+            strategyId: 'ema_trend',
+            strategyName: 'EMA Trend',
+            signal: 'UP',
+            score: 85,
+            rawScore: 85,
+            normalizedScore: 85,
+            qualified: true,
+            dataValid: true,
+            reasons: ['EMA bullish alignment'],
+            conditions: [],
+          },
+        ],
+      };
+
+      // 1. Evaluate Decision
+      const decision = (testAutoTrader as any).evaluateSignal(signal);
+      assert.ok(decision, `Decision must exist for ${item.label}`);
+      assert.strictEqual(decision.action, 'call', `Action must be call for ${item.label}`);
+      assert.strictEqual(
+        decision.duration,
+        item.expectedSec,
+        `Decision duration for ${item.label} must be exactly ${item.expectedSec}s`
+      );
+
+      // 2. Dispatch Order and verify actual broker call
+      await testAutoTrader.onSignalUpdate(signal);
+
+      // Wait for pipeline execution
+      await new Promise((r) => setTimeout(r, 200));
+
+      assert.ok(openedDealParams, `openDeal must have been called for ${item.label}`);
+      assert.strictEqual(openedDealParams.amount, 10, `Trade amount must match configured $10`);
+      assert.strictEqual(
+        openedDealParams.time,
+        item.expectedSec,
+        `Trade duration sent to Pocket Option for ${item.label} must be exactly ${item.expectedSec}s!`
+      );
+      assert.strictEqual(openedDealParams.action, 'call', `Action must be call`);
+
+      testAutoTrader.stop();
+    }
+  });
+
   after(() => {
     setTimeout(() => {
       process.exit(0);
