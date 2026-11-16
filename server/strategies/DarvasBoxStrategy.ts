@@ -230,21 +230,25 @@ export class DarvasBoxStrategy {
         name: `Upper Boundary (Resistance) established at ${activeBox.upper.toFixed(5)} (${reqConsecutive} candles held)`,
         satisfied: activeBox.isConfirmed,
         weight: 30,
+        isMandatory: true,
       },
       {
         name: `Lower Boundary (Support) established at ${activeBox.lower.toFixed(5)} (${reqConsecutive} candles held)`,
         satisfied: activeBox.isConfirmed,
         weight: 30,
+        isMandatory: true,
       },
       {
         name: `Consolidation Volume/Candle Containment (${activeBox.candlesInside} candles validated inside box)`,
         satisfied: activeBox.candlesInside >= 3,
         weight: 20,
+        isMandatory: true,
       },
       {
         name: `Candle Close Confirmation outside Box Boundary (Close: ${currentPrice.toFixed(5)})`,
         satisfied: isBullishBreakout || isBearishBreakdown,
         weight: 20,
+        isMandatory: true,
       },
     ];
 
@@ -303,7 +307,7 @@ export class DarvasBoxStrategy {
         strategyId: 'darvas_box',
         strategyName: 'Nicolas Darvas Box',
         signal: 'DOWN',
-        score: (bearishScore / 100) * config.weight * 2,
+        score: -(bearishScore / 100) * config.weight * 2,
         weight: config.weight,
         reasons: [
           `Darvas breakdown detected: current candle closed (${currentPrice.toFixed(5)}) strictly below confirmed lower box boundary (${activeBox.lower.toFixed(5)})`,

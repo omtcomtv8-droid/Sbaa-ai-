@@ -124,7 +124,12 @@ export class HistoricalCandleService {
     limit: number
   ): Promise<Candle[]> {
     // Map timeframe in seconds to Binance interval
-    const interval = timeframe >= 86400 ? '1d' : timeframe >= 3600 ? '1h' : timeframe >= 300 ? '5m' : '1m';
+    const interval =
+      timeframe >= 86400 ? '1d' :
+      timeframe >= 3600 ? '1h' :
+      timeframe >= 1800 ? '30m' :
+      timeframe >= 900 ? '15m' :
+      timeframe >= 300 ? '5m' : '1m';
     const url = `${HistoricalCandleService.BINANCE_BASE}?symbol=${symbol}&interval=${interval}&limit=${limit}`;
 
     const res = await fetch(url, {
@@ -182,8 +187,18 @@ export class HistoricalCandleService {
   }
 
   private async fetchYahooCandles(asset: string, symbol: string, timeframe: number): Promise<Candle[]> {
-    const interval = timeframe >= 86400 ? '1d' : timeframe >= 3600 ? '60m' : timeframe >= 300 ? '5m' : '1m';
-    const url = `${HistoricalCandleService.YAHOO_BASE}/${symbol}?interval=${interval}&range=1d`;
+    const interval =
+      timeframe >= 86400 ? '1d' :
+      timeframe >= 3600 ? '60m' :
+      timeframe >= 1800 ? '30m' :
+      timeframe >= 900 ? '15m' :
+      timeframe >= 300 ? '5m' : '1m';
+    const range =
+      timeframe >= 86400 ? '1y' :
+      timeframe >= 3600 ? '3mo' :
+      timeframe >= 900 ? '1mo' :
+      timeframe >= 300 ? '5d' : '2d';
+    const url = `${HistoricalCandleService.YAHOO_BASE}/${symbol}?interval=${interval}&range=${range}`;
 
     const res = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' },

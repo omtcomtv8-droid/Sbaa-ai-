@@ -1,4 +1,4 @@
-import { Candle, StrategyResult, SupportResistanceConfig } from '../types';
+import { Candle, StrategyResult, SupportResistanceConfig, StrategyCondition } from '../types';
 import { SupportResistanceEngine } from '../SupportResistanceEngine';
 
 export class SupportResistanceStrategy {
@@ -15,6 +15,11 @@ export class SupportResistanceStrategy {
         reasons: ['Strategy disabled in settings'],
         candleTimestamp,
         dataValid: true,
+        bullishScore: 0,
+        bearishScore: 0,
+        percentage: 0,
+        direction: 'NEUTRAL',
+        conditions: [],
       };
     }
 
@@ -28,6 +33,11 @@ export class SupportResistanceStrategy {
         reasons: ['Accumulating historical candles for S/R zones'],
         candleTimestamp,
         dataValid: false,
+        bullishScore: 0,
+        bearishScore: 0,
+        percentage: 0,
+        direction: 'NEUTRAL',
+        conditions: [],
       };
     }
 
@@ -37,42 +47,107 @@ export class SupportResistanceStrategy {
     const curr = candles[candles.length - 1];
     const prev = candles[candles.length - 2];
 
-    // Support Bounce: Current or previous low reached support and closed bullish green above support
-    if (nearestSupport && (isTestingSupport || (curr.low <= nearestSupport.price && curr.close > nearestSupport.price))) {
-      if (curr.close > curr.open) {
-        return {
-          strategyId: 'support_resistance',
-          strategyName: 'Support / Resistance',
-          signal: 'UP',
-          score: config.weight * 2,
-          weight: config.weight,
-          reasons: [
-            `Support Zone Bounce at ${nearestSupport.price.toFixed(5)} (${nearestSupport.touches} touches, strength ${nearestSupport.strength}/5)`,
-            `Bullish candle close confirms demand absorption at support`,
-          ],
-          candleTimestamp,
-          dataValid: true,
-        };
-      }
+    const supportTouched = Boolean(
+      nearestSupport && (isTestingSupport || (curr.low <= nearestSupport.price && curr.close > nearestSupport.price))
+    );
+    const supportConfirmClose = curr.close > curr.open && curr.close > prev.close;
+    const supportStrong = Boolean(nearestSupport && nearestSupport.strength >= 2);
+
+    const resistanceTouched = Boolean(
+      nearestResistance && (isTestingResistance || (curr.high >= nearestResistance.price && curr.close < nearestResistance.price))
+    );
+    const resistanceConfirmClose = curr.close < curr.open && curr.close < prev.close;
+    const resistanceStrong = Boolean(nearestResistance && nearestResistance.strength >= 2);
+
+    const bullishConditions: StrategyCondition[] = [
+      {
+        id: 'sr_support_touch',
+        name: nearestSupport ? `Support Zone Tested (${nearestSupport.price.toFixed(5)})` : 'Nearest Support Zone Tested',
+        satisfied: supportTouched,
+        weight: 45,
+        isMandatory: true,
+      },
+      {
+        id: 'sr_support_bounce',
+        name: `Bullish Rejection Close Above Support`,
+        satisfied: supportConfirmClose,
+        weight: 35,
+        isMandatory: true,
+      },
+      {
+        id: 'sr_support_strength',
+        name: `Multi-Touch Institutional Support Strength (>= 2)`,
+        satisfied: supportStrong,
+        weight: 20,
+      },
+    ];
+
+    const bearishConditions: StrategyCondition[] = [
+      {
+        id: 'sr_resistance_touch',
+        name: nearestResistance ? `Resistance Zone Tested (${nearestResistance.price.toFixed(5)})` : 'Nearest Resistance Zone Tested',
+        satisfied: resistanceTouched,
+        weight: 45,
+        isMandatory: true,
+      },
+      {
+        id: 'sr_resistance_reject',
+        name: `Bearish Rejection Close Below Resistance`,
+        satisfied: resistanceConfirmClose,
+        weight: 35,
+        isMandatory: true,
+      },
+      {
+        id: 'sr_resistance_strength',
+        name: `Multi-Touch Institutional Resistance Strength (>= 2)`,
+        satisfied: resistanceStrong,
+        weight: 20,
+      },
+    ];
+
+    const bullishScore = bullishConditions.reduce((acc, c) => acc + (c.satisfied ? c.weight : 0), 0);
+    const bearishScore = bearishConditions.reduce((acc, c) => acc + (c.satisfied ? c.weight : 0), 0);
+
+    if (supportTouched && supportConfirmClose && nearestSupport) {
+      return {
+        strategyId: 'support_resistance',
+        strategyName: 'Support / Resistance',
+        signal: 'UP',
+        score: (bullishScore / 100) * config.weight * 2,
+        weight: config.weight,
+        reasons: [
+          `Support Zone Bounce at ${nearestSupport.price.toFixed(5)} (${nearestSupport.touches} touches, strength ${nearestSupport.strength}/5)`,
+          `Bullish candle close confirms demand absorption at support`,
+        ],
+        candleTimestamp,
+        dataValid: true,
+        bullishScore,
+        bearishScore,
+        percentage: bullishScore,
+        direction: 'BULLISH',
+        conditions: bullishConditions,
+      };
     }
 
-    // Resistance Rejection: Current or previous high reached resistance and closed bearish red below resistance
-    if (nearestResistance && (isTestingResistance || (curr.high >= nearestResistance.price && curr.close < nearestResistance.price))) {
-      if (curr.close < curr.open) {
-        return {
-          strategyId: 'support_resistance',
-          strategyName: 'Support / Resistance',
-          signal: 'DOWN',
-          score: -config.weight * 2,
-          weight: config.weight,
-          reasons: [
-            `Resistance Zone Rejection at ${nearestResistance.price.toFixed(5)} (${nearestResistance.touches} touches, strength ${nearestResistance.strength}/5)`,
-            `Bearish candle close confirms supply overhead at resistance`,
-          ],
-          candleTimestamp,
-          dataValid: true,
-        };
-      }
+    if (resistanceTouched && resistanceConfirmClose && nearestResistance) {
+      return {
+        strategyId: 'support_resistance',
+        strategyName: 'Support / Resistance',
+        signal: 'DOWN',
+        score: -(bearishScore / 100) * config.weight * 2,
+        weight: config.weight,
+        reasons: [
+          `Resistance Zone Rejection at ${nearestResistance.price.toFixed(5)} (${nearestResistance.touches} touches, strength ${nearestResistance.strength}/5)`,
+          `Bearish candle close confirms supply overhead at resistance`,
+        ],
+        candleTimestamp,
+        dataValid: true,
+        bullishScore,
+        bearishScore,
+        percentage: bearishScore,
+        direction: 'BEARISH',
+        conditions: bearishConditions,
+      };
     }
 
     return {
@@ -87,6 +162,11 @@ export class SupportResistanceStrategy {
       ],
       candleTimestamp,
       dataValid: true,
+      bullishScore,
+      bearishScore,
+      percentage: Math.max(bullishScore, bearishScore),
+      direction: 'NEUTRAL',
+      conditions: bullishScore >= bearishScore ? bullishConditions : bearishConditions,
     };
   }
 }

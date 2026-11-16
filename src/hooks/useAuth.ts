@@ -6,7 +6,6 @@ export function useAuth(): AuthStoreState & {
   activateCode: (code: string) => Promise<{ success: boolean; error?: string }>;
   logOut: () => Promise<void>;
   checkActivationStatus: () => Promise<boolean>;
-  enterDemoGuest: () => void;
 } {
   const [state, setState] = useState<AuthStoreState>(() => authStore.getState());
 
@@ -23,6 +22,5 @@ export function useAuth(): AuthStoreState & {
     activateCode: (code: string) => authStore.activateCode(code),
     logOut: () => authStore.logOut(),
     checkActivationStatus: () => authStore.checkActivationStatus(),
-    enterDemoGuest: () => authStore.enterDemoGuest(),
   };
 }

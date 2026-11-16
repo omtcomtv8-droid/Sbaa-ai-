@@ -1,4 +1,4 @@
-import { Candle, StrategyResult } from '../types';
+import { Candle, StrategyResult, StrategyCondition } from '../types';
 import { calculateCCI } from '../indicators';
 
 export interface CciConfig {
@@ -72,65 +72,87 @@ export class CciStrategy {
       };
     }
 
-    const isBullishRebound = prevCci <= -config.threshold && cci > -config.threshold;
-    const isBullishSurge = cci > config.threshold && cci > prevCci;
-    const isBearishRebound = prevCci >= config.threshold && cci < config.threshold;
-    const isBearishDrop = cci < -config.threshold && cci < prevCci;
+    const th = config.threshold;
+    const isBullishRebound = prevCci <= -th && cci > -th;
+    const isBullishSurge = cci > th && cci > prevCci;
+    const isBearishRebound = prevCci >= th && cci < th;
+    const isBearishDrop = cci < -th && cci < prevCci;
 
-    const conditions = [
-      { name: `CCI Crossing Up through -${config.threshold}`, satisfied: isBullishRebound, weight: 50 },
-      { name: `CCI Bullish Surge > +${config.threshold}`, satisfied: isBullishSurge, weight: 50 },
-      { name: `CCI Crossing Down through +${config.threshold}`, satisfied: isBearishRebound, weight: 50 },
-      { name: `CCI Bearish Plunge < -${config.threshold}`, satisfied: isBearishDrop, weight: 50 },
+    const isBullSignal = isBullishRebound || isBullishSurge;
+    const isBearSignal = isBearishRebound || isBearishDrop;
+
+    const bullishConditions: StrategyCondition[] = [
+      {
+        id: 'cci_bull_trigger',
+        name: `CCI Bullish Rebound (> -${th}) or Surge (> +${th})`,
+        satisfied: isBullSignal,
+        weight: 80,
+        isMandatory: true,
+      },
+      {
+        id: 'cci_bull_slope',
+        name: `CCI Expanding Upward (${prevCci.toFixed(1)} -> ${cci.toFixed(1)})`,
+        satisfied: cci > prevCci,
+        weight: 20,
+      },
     ];
 
-    let bullishScore = 0;
-    if (isBullishRebound) bullishScore += 65;
-    if (isBullishSurge) bullishScore += 35;
-    if (cci > 0) bullishScore += 20;
+    const bearishConditions: StrategyCondition[] = [
+      {
+        id: 'cci_bear_trigger',
+        name: `CCI Bearish Drop (< +${th}) or Plunge (< -${th})`,
+        satisfied: isBearSignal,
+        weight: 80,
+        isMandatory: true,
+      },
+      {
+        id: 'cci_bear_slope',
+        name: `CCI Expanding Downward (${prevCci.toFixed(1)} -> ${cci.toFixed(1)})`,
+        satisfied: cci < prevCci,
+        weight: 20,
+      },
+    ];
 
-    let bearishScore = 0;
-    if (isBearishRebound) bearishScore += 65;
-    if (isBearishDrop) bearishScore += 35;
-    if (cci < 0) bearishScore += 20;
+    const bullishScore = bullishConditions.reduce((acc, c) => acc + (c.satisfied ? c.weight : 0), 0);
+    const bearishScore = bearishConditions.reduce((acc, c) => acc + (c.satisfied ? c.weight : 0), 0);
 
-    if (isBullishRebound || (cci > 100 && cci > prevCci)) {
+    if (isBullSignal && !isBearSignal) {
       return {
         strategyId: 'cci_strategy',
         strategyName: 'CCI Momentum',
         signal: 'UP',
-        score: (Math.min(100, bullishScore) / 100) * config.weight * 2,
+        score: (bullishScore / 100) * config.weight * 2,
         weight: config.weight,
         reasons: [
-          `CCI (${cci.toFixed(1)}) bullish reversal/surge above threshold`,
+          `CCI (${cci.toFixed(1)}) bullish ${isBullishRebound ? `rebound above -${th}` : `surge above +${th}`}`,
         ],
         candleTimestamp,
         dataValid: true,
-        bullishScore: Math.min(100, bullishScore),
-        bearishScore: Math.min(100, bearishScore),
-        percentage: Math.min(100, bullishScore),
+        bullishScore,
+        bearishScore,
+        percentage: bullishScore,
         direction: 'BULLISH',
-        conditions,
+        conditions: bullishConditions,
       };
     }
 
-    if (isBearishRebound || (cci < -100 && cci < prevCci)) {
+    if (isBearSignal && !isBullSignal) {
       return {
         strategyId: 'cci_strategy',
         strategyName: 'CCI Momentum',
         signal: 'DOWN',
-        score: -(Math.min(100, bearishScore) / 100) * config.weight * 2,
+        score: -(bearishScore / 100) * config.weight * 2,
         weight: config.weight,
         reasons: [
-          `CCI (${cci.toFixed(1)}) bearish reversal/plunge below threshold`,
+          `CCI (${cci.toFixed(1)}) bearish ${isBearishRebound ? `rejection below +${th}` : `plunge below -${th}`}`,
         ],
         candleTimestamp,
         dataValid: true,
-        bullishScore: Math.min(100, bullishScore),
-        bearishScore: Math.min(100, bearishScore),
-        percentage: Math.min(100, bearishScore),
+        bullishScore,
+        bearishScore,
+        percentage: bearishScore,
         direction: 'BEARISH',
-        conditions,
+        conditions: bearishConditions,
       };
     }
 
@@ -140,14 +162,14 @@ export class CciStrategy {
       signal: 'WAIT',
       score: 0,
       weight: config.weight,
-      reasons: [`CCI (${cci.toFixed(1)}) hovering in neutral channel`],
+      reasons: [`CCI (${cci.toFixed(1)}) hovering in neutral channel (-${th} to +${th})`],
       candleTimestamp,
       dataValid: true,
-      bullishScore: 30,
-      bearishScore: 30,
+      bullishScore,
+      bearishScore,
       percentage: Math.max(bullishScore, bearishScore),
       direction: 'NEUTRAL',
-      conditions,
+      conditions: bullishScore >= bearishScore ? bullishConditions : bearishConditions,
     };
   }
 }

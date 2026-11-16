@@ -302,32 +302,6 @@ class AuthStore {
     }
   }
 
-  public enterDemoGuest(): void {
-    const demoUser: UserInfo = {
-      uid: 'guest_demo_' + Math.random().toString(36).substring(2, 8),
-      email: 'demo@trader.live',
-      displayName: 'Demo Trader (حساب تجريبي)',
-      role: 'guest',
-    };
-    const demoActivation: ActivationInfo = {
-      code: 'DEMO-ACCESS-TRIAL',
-      status: 'ACTIVE',
-      durationHours: 168,
-      durationLabel: 'Instant Demo Platform Access (وصول تجريبي فوري)',
-      expiresAt: new Date(Date.now() + 7 * 86400 * 1000).toISOString(),
-      maxDevices: 1,
-      activeDevicesCount: 1,
-    };
-
-    this.setState({
-      authState: 'ACTIVE',
-      user: demoUser,
-      activation: demoActivation,
-      sessionToken: 'demo_token_' + Date.now(),
-      errorMessage: null,
-    });
-  }
-
   public async logOut(): Promise<void> {
     await fbLogOut();
     safeStorage.removeSessionItem('sabaa_admin_token');

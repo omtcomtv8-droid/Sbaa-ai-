@@ -1,4 +1,4 @@
-import { Candle, StrategyResult } from '../types';
+import { Candle, StrategyResult, StrategyCondition } from '../types';
 import { calculateStochastic } from '../indicators';
 
 export interface StochasticConfig {
@@ -83,28 +83,27 @@ export class StochasticStrategy {
 
     const isBullishCross = stochPrev.k <= stochPrev.d && stochCurr.k > stochCurr.d + 0.5;
     const isBearishCross = stochPrev.k >= stochPrev.d && stochCurr.k < stochCurr.d - 0.5;
-    const isOversold = stochCurr.k <= config.oversold;
-    const isOverbought = stochCurr.k >= config.overbought;
+    const isBullZone = stochCurr.k < 50;
+    const isBearZone = stochCurr.k > 50;
+    const isOversold = stochCurr.k <= config.oversold || stochPrev.k <= config.oversold;
+    const isOverbought = stochCurr.k >= config.overbought || stochPrev.k >= config.overbought;
 
-    const bullishConditions = [
-      { name: `%K <= ${config.oversold} (Oversold)`, satisfied: isOversold, weight: 35, isMandatory: true },
-      { name: `%K Crossed Above %D`, satisfied: isBullishCross, weight: 65, isMandatory: true },
+    const bullishConditions: StrategyCondition[] = [
+      { id: 'stoch_bull_cross', name: `%K (${stochCurr.k.toFixed(1)}) Crossed Above %D (${stochCurr.d.toFixed(1)})`, satisfied: isBullishCross, weight: 55, isMandatory: true },
+      { id: 'stoch_bull_mid', name: `%K in Lower Half (< 50)`, satisfied: isBullZone, weight: 20, isMandatory: true },
+      { id: 'stoch_oversold', name: `Extreme Oversold Origin (<= ${config.oversold})`, satisfied: isOversold, weight: 25, isMandatory: false },
     ];
 
-    const bearishConditions = [
-      { name: `%K >= ${config.overbought} (Overbought)`, satisfied: isOverbought, weight: 35, isMandatory: true },
-      { name: `%K Crossed Below %D`, satisfied: isBearishCross, weight: 65, isMandatory: true },
+    const bearishConditions: StrategyCondition[] = [
+      { id: 'stoch_bear_cross', name: `%K (${stochCurr.k.toFixed(1)}) Crossed Below %D (${stochCurr.d.toFixed(1)})`, satisfied: isBearishCross, weight: 55, isMandatory: true },
+      { id: 'stoch_bear_mid', name: `%K in Upper Half (> 50)`, satisfied: isBearZone, weight: 20, isMandatory: true },
+      { id: 'stoch_overbought', name: `Extreme Overbought Origin (>= ${config.overbought})`, satisfied: isOverbought, weight: 25, isMandatory: false },
     ];
 
-    let bullishScore = 0;
-    if (isOversold) bullishScore += 35;
-    if (isBullishCross) bullishScore += 65;
+    const bullishScore = bullishConditions.reduce((acc, c) => acc + (c.satisfied ? c.weight : 0), 0);
+    const bearishScore = bearishConditions.reduce((acc, c) => acc + (c.satisfied ? c.weight : 0), 0);
 
-    let bearishScore = 0;
-    if (isOverbought) bearishScore += 35;
-    if (isBearishCross) bearishScore += 65;
-
-    if (isBullishCross && stochCurr.k < 50) {
+    if (isBullishCross && isBullZone) {
       return {
         strategyId: 'stochastic',
         strategyName: 'Stochastic Oscillator',
@@ -113,7 +112,7 @@ export class StochasticStrategy {
         weight: config.weight,
         reasons: [
           `Bullish Stochastic Cross: %K (${stochCurr.k.toFixed(1)}) crossed above %D (${stochCurr.d.toFixed(1)})`,
-          isOversold ? `Triggered from oversold region (< ${config.oversold})` : '',
+          isOversold ? `Triggered from oversold region (<= ${config.oversold})` : '',
         ].filter(Boolean),
         candleTimestamp,
         dataValid: true,
@@ -125,7 +124,7 @@ export class StochasticStrategy {
       };
     }
 
-    if (isBearishCross && stochCurr.k > 50) {
+    if (isBearishCross && isBearZone) {
       return {
         strategyId: 'stochastic',
         strategyName: 'Stochastic Oscillator',
@@ -134,7 +133,7 @@ export class StochasticStrategy {
         weight: config.weight,
         reasons: [
           `Bearish Stochastic Cross: %K (${stochCurr.k.toFixed(1)}) crossed below %D (${stochCurr.d.toFixed(1)})`,
-          isOverbought ? `Triggered from overbought region (> ${config.overbought})` : '',
+          isOverbought ? `Triggered from overbought region (>= ${config.overbought})` : '',
         ].filter(Boolean),
         candleTimestamp,
         dataValid: true,

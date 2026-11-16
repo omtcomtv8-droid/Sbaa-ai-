@@ -137,17 +137,16 @@ export class PocketOptionAuthManager {
     }
 
     // Determine final isDemo:
-    // Highest priority: If detectedIsDemo from SSID payload is found (e.g. isDemo: 0 in real account frame)
-    // Next priority: User's explicitly requested expectedMode
-    // Next priority: Explicit isDemo flag from caller
-    // Fallback: Default to DEMO mode (1)
+    // Highest priority: User's explicitly requested expectedMode or explicit isDemo flag
+    // Fallback: If not specified, use detectedIsDemo from payload if present (e.g. isDemo: 0 or 1 in frame)
+    // Default: DEMO mode (1)
     let isDemo: 0 | 1 = 1;
-    if (detectedIsDemo !== null) {
-      isDemo = detectedIsDemo;
-    } else if (input.expectedMode) {
+    if (input.expectedMode) {
       isDemo = input.expectedMode === 'DEMO' ? 1 : 0;
     } else if (input.isDemo !== undefined && input.isDemo !== null) {
       isDemo = input.isDemo === true || input.isDemo === 1 ? 1 : 0;
+    } else if (detectedIsDemo !== null) {
+      isDemo = detectedIsDemo;
     } else {
       isDemo = 1;
     }

@@ -227,11 +227,11 @@ def calculate_adx(candles: List[Dict[str, Any]], period: int = 14) -> Optional[D
     if len(dx_list) < period:
         return None
         
-    adx_series = calculate_ema_series(dx_list, period)
-    if not adx_series:
-        return None
+    adx_val_raw = sum(dx_list[:period]) / period
+    for dx in dx_list[period:]:
+        adx_val_raw = (adx_val_raw * (period - 1) + dx) / period
         
-    adx_val = round(adx_series[-1], 2)
+    adx_val = round(adx_val_raw, 2)
     plus_di_val = round((smooth_plus / smooth_tr * 100) if smooth_tr > 0 else 0.0, 2)
     minus_di_val = round((smooth_minus / smooth_tr * 100) if smooth_tr > 0 else 0.0, 2)
     

@@ -30,7 +30,7 @@ async function runSbaaAutoTraderIntegrationTest() {
   const poService = new PocketOptionService(candleBuilder, 'wss://api-fin.po.market/socket.io/?EIO=4&transport=websocket', 'EURUSD_otc', 60);
   const strategyEngine = new StrategyEngine(candleBuilder);
   const sbaaEngine = new SbaaStrategyEngine(candleBuilder, poService);
-  const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, sbaaEngine);
+  const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, sbaaEngine, undefined, undefined, false);
 
   // TEST 1: Default or configured strategy accepts 'sbaa'
   console.log('[TEST 1: Strategy Configuration]');

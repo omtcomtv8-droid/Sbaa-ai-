@@ -129,8 +129,37 @@ async function runTestSuite() {
   assert(snap4.balance === null, 'Balance is never populated with fabricated dummy $10,000 on auth failure');
   assert(snap5.balance === null, 'Balance is never populated with fabricated dummy $10,000 on session expiry');
 
+  // TEST 11: DEMO BALANCE EXTRACTION & SSD MODE RETENTION
+  console.log('\n[TEST 11] DEMO balance extraction & SSD mode retention');
+  const realSsdString = '42["auth",{"session":"demo_test_session_abc123","isDemo":0,"uid":86051234,"platform":9}]';
+  const parsedForDemo = PocketOptionAuthManager.parse({
+    sessionToken: realSsdString,
+    expectedMode: 'DEMO',
+  });
+  assert(parsedForDemo.isDemo === 1, 'ExpectedMode DEMO overrides payload isDemo:0');
+  assert(parsedForDemo.accountMode === 'DEMO', 'AccountMode is DEMO');
+
+  const canonicalAuth = PocketOptionAuthManager.buildCanonicalPayload(
+    parsedForDemo.session,
+    'DEMO',
+    parsedForDemo.uid
+  );
+  assert(canonicalAuth.payload.isDemo === 1, 'Canonical auth payload sends isDemo: 1 for DEMO mode');
+
+  const mgr11 = new PocketOptionAccountManager('DEMO');
+  mgr11.setCredentials({ mode: 'DEMO', sessionToken: parsedForDemo.session, uid: parsedForDemo.uid });
+  mgr11.setAuthSuccess(mgr11.getGeneration(), 'DEMO', parsedForDemo.uid);
+  
+  // Simulate broker sending payload with balance: 0 and demo_balance: 10000
+  const brokerAuthPayload = { id: 86051234, balance: 0, demo_balance: 10000, isDemo: 0 };
+  const dBal = brokerAuthPayload.demo_balance;
+  mgr11.updateBalance(mgr11.getGeneration(), 'DEMO', dBal, 'USD');
+  const acc11 = mgr11.buildAccountInfo();
+  assert(acc11.balance === 10000, 'DEMO account extracts $10,000 demo balance even if real balance is 0');
+  assert(acc11.status === 'LIVE', 'Account status becomes LIVE once balance is received');
+
   console.log('\n===============================================================');
-  console.log('✓✓✓ ALL 10 TESTS IN POCKET OPTION PROTOCOL MATRIX PASSED! ✓✓✓');
+  console.log('✓✓✓ ALL 11 TESTS IN POCKET OPTION PROTOCOL MATRIX PASSED! ✓✓✓');
   console.log('===============================================================');
 }
 

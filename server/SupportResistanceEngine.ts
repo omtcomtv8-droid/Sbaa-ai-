@@ -1,4 +1,5 @@
 import { Candle, SupportResistanceLevel } from './types';
+import { calculateATR } from './indicators';
 
 export class SupportResistanceEngine {
   /**
@@ -107,9 +108,13 @@ export class SupportResistanceEngine {
     const nearestSupport = supports.length > 0 ? supports[0] : null;
     const nearestResistance = resistances.length > 0 ? resistances[0] : null;
 
-    // Is price within tight testing zone (<= 0.05% distance)?
-    const isTestingSupport = nearestSupport ? nearestSupport.distancePercent <= 0.05 : false;
-    const isTestingResistance = nearestResistance ? nearestResistance.distancePercent <= 0.05 : false;
+    // Dynamic ATR-scaled testing zone (capped at 0.05%, floor 0.008%)
+    const atrData = calculateATR(candles, 14);
+    const atrPercent = atrData && currentPrice > 0 ? (atrData.currentATR / currentPrice) * 100 : 0.05;
+    const testZonePercent = Math.min(0.05, Math.max(0.008, atrPercent * 0.45));
+
+    const isTestingSupport = nearestSupport ? nearestSupport.distancePercent <= testZonePercent : false;
+    const isTestingResistance = nearestResistance ? nearestResistance.distancePercent <= testZonePercent : false;
 
     return {
       supports: supports.slice(0, 5),

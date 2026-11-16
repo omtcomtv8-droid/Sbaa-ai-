@@ -254,6 +254,7 @@ export class GannPriceTimeStrategy {
         name: `Candle Close Confirmation (Closed above previous candle close)`,
         satisfied: isCandleCloseBullish,
         weight: 15,
+        isMandatory: true,
       },
     ];
 
@@ -282,6 +283,7 @@ export class GannPriceTimeStrategy {
         name: `Candle Close Confirmation (Closed below previous candle close)`,
         satisfied: isCandleCloseBearish,
         weight: 15,
+        isMandatory: true,
       },
     ];
 
@@ -335,7 +337,7 @@ export class GannPriceTimeStrategy {
         strategyId: 'gann_price_time',
         strategyName: 'W.D. Gann Price/Time',
         signal: 'DOWN',
-        score: (bearishScore / 100) * config.weight * 2,
+        score: -(bearishScore / 100) * config.weight * 2,
         weight: config.weight,
         reasons: [
           `Gann price/time structure confirms bearish expansion: price (${currentPrice.toFixed(5)}) broke below 1x1 angle (${angle1x1Value.toFixed(5)})`,

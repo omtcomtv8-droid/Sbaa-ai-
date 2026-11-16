@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { ShieldCheck, LogIn, Lock, Sparkles, TrendingUp, CheckCircle2, ShieldAlert, Key } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Key } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useLanguage } from '../i18n/LanguageContext';
+import { BrandLogo } from './BrandLogo';
 
 interface LoginPageProps {
   onOpenAdminLogin?: () => void;
@@ -9,7 +10,7 @@ interface LoginPageProps {
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onOpenAdminLogin, onOpenKeyRoom }) => {
-  const { signInWithGoogle, isAuthenticatingGoogle, errorMessage, activateCode, enterDemoGuest } = useAuth();
+  const { signInWithGoogle, isAuthenticatingGoogle, errorMessage, activateCode } = useAuth();
   const { isRTL } = useLanguage();
   const [directCode, setDirectCode] = useState('');
   const [activatingDirect, setActivatingDirect] = useState(false);
@@ -17,29 +18,31 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenAdminLogin, onOpenKe
 
   return (
     <div className="min-h-screen bg-[#05070B] text-slate-100 flex items-center justify-center p-4 relative overflow-hidden font-sans" dir={isRTL ? 'rtl' : 'ltr'}>
-      {/* Background ambient lighting */}
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 sm:w-[600px] h-96 bg-amber-500/10 rounded-full blur-[140px] pointer-events-none" />
-      <div className="absolute bottom-10 right-10 w-96 h-96 bg-blue-600/10 rounded-full blur-[120px] pointer-events-none" />
+      {/* Ambient institutional lighting */}
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 sm:w-[600px] h-96 bg-emerald-500/10 rounded-full blur-[150px] pointer-events-none" />
+      <div className="absolute bottom-10 right-10 w-96 h-96 bg-amber-500/10 rounded-full blur-[130px] pointer-events-none" />
 
-      <div className="relative w-full max-w-md bg-slate-900/90 border border-slate-800 backdrop-blur-xl rounded-3xl shadow-2xl p-6 sm:p-8 text-center space-y-6">
-        {/* Brand Icon */}
+      <div className="relative w-full max-w-md bg-slate-900/95 border border-emerald-500/20 backdrop-blur-xl rounded-3xl shadow-2xl p-6 sm:p-8 text-center space-y-6">
+        {/* Redesigned Brand Icon */}
         <div className="flex justify-center">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 p-0.5 shadow-xl shadow-amber-500/20">
-            <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center text-amber-400">
-              <TrendingUp className="w-8 h-8" />
-            </div>
+          <div className="p-1.5 rounded-3xl bg-gradient-to-br from-emerald-500/20 via-slate-800/40 to-amber-500/20 border border-emerald-500/25 shadow-xl shadow-emerald-950/30">
+            <BrandLogo size="xl" />
           </div>
         </div>
 
         {/* Title */}
         <div className="space-y-2">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-[10px] font-mono font-bold text-emerald-400 tracking-wider uppercase">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            <span>REAL LIVE TERMINAL</span>
+          </div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-100 tracking-tight">
-            SABAA AI SOLUTION
+            SABAA QUANT
           </h1>
           <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
             {isRTL
-              ? 'منصة التحليل المؤسسي والرؤية الحاسوبية للتداول بالذكاء الاصطناعي وإدارة المخاطر'
-              : 'Institutional algorithmic engine, computer vision analysis, and risk management'}
+              ? 'منصة التحليل الكمي المؤسسي والتداول الخوارزمي المباشر عبر الحساب الحقيقي فقط'
+              : 'Institutional quantitative algorithmic analysis and real-account trading terminal'}
           </p>
         </div>
 
@@ -86,7 +89,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenAdminLogin, onOpenKe
           <div className="relative flex items-center justify-center">
             <div className="border-t border-slate-800 w-full" />
             <span className="bg-slate-900 px-3 text-[11px] text-slate-500 font-mono uppercase">
-              {isRTL ? 'أو الدخول عبر المفتاح / التجريبي' : 'OR VIA KEY / DEMO'}
+              {isRTL ? 'أو الدخول عبر كود التفعيل' : 'OR VIA ACTIVATION KEY'}
             </span>
             <div className="border-t border-slate-800 w-full" />
           </div>
@@ -115,7 +118,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenAdminLogin, onOpenKe
                   setDirectError(null);
                 }}
                 placeholder={isRTL ? 'أدخل كود التفعيل أو الماستر (SABAA-XXXX أو sbaa0000)' : 'Enter activation code or master sbaa0000'}
-                className="w-full py-2.5 px-3.5 bg-slate-950/80 border border-slate-700/80 rounded-xl text-slate-100 placeholder-slate-500 font-mono text-xs focus:outline-none focus:border-amber-400 text-center tracking-wider"
+                className="w-full py-2.5 px-3.5 bg-slate-950/80 border border-slate-700/80 rounded-xl text-slate-100 placeholder-slate-500 font-mono text-xs focus:outline-none focus:border-emerald-400 text-center tracking-wider"
               />
             </div>
             {directError && (
@@ -124,7 +127,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenAdminLogin, onOpenKe
             <button
               type="submit"
               disabled={activatingDirect || !directCode.trim()}
-              className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs transition-all shadow-md shadow-amber-500/10 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+              className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-amber-500 hover:from-emerald-400 hover:to-amber-400 text-slate-950 font-black text-xs transition-all shadow-md shadow-emerald-500/15 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
             >
               {activatingDirect ? (
                 <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
@@ -134,23 +137,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onOpenAdminLogin, onOpenKe
               <span>{isRTL ? 'تفعيل ودخول المنصة المباشر' : 'Activate & Enter Platform'}</span>
             </button>
           </form>
-
-          {/* Instant Demo Access Button */}
-          <button
-            type="button"
-            onClick={() => enterDemoGuest()}
-            className="w-full py-2.5 px-3 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-300 hover:text-amber-400 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>{isRTL ? 'دخول تجريبي فوري ومباشر للمنصة (Instant Demo)' : 'Instant Demo Platform Access'}</span>
-          </button>
         </div>
 
         {/* Security badges */}
         <div className="pt-4 border-t border-slate-800/80 grid grid-cols-2 gap-2 text-[11px] text-slate-400">
           <div className="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-slate-950/60 border border-slate-800/60">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>{isRTL ? 'توثيق Google آمن' : 'OAuth 2.0 Security'}</span>
+            <span>{isRTL ? 'اتصال حقيقي مباشر' : 'Real Account Only'}</span>
           </div>
           <div className="flex items-center justify-center gap-1.5 p-2 rounded-xl bg-slate-950/60 border border-slate-800/60">
             <Key className="w-3.5 h-3.5 text-amber-400" />

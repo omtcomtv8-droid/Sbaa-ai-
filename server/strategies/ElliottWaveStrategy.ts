@@ -404,21 +404,35 @@ export class ElliottWaveStrategy {
       lastConfirmedStructure: `${primaryCount} (${selectedWaves.length} swing points confirmed)`,
     };
 
-    // Objective Conditions for Signal
-    const conditions = selectedRules.map((r) => ({
-      name: `${r.rule}: ${r.note}`,
-      satisfied: r.passed,
-      weight: Math.round(100 / Math.max(1, selectedRules.length)),
-    }));
+    // Objective Conditions for Signal (rules sum = 80, candle confirm = 20, total = 100)
+    const ruleCount = Math.max(1, selectedRules.length);
+    const baseRuleWeight = Math.floor(80 / ruleCount);
+    const ruleRemainder = 80 - baseRuleWeight * ruleCount;
+    const isDirectionalBull = dominantTrend === 'IMPULSE_BULLISH';
+    const isDirectionalBear = dominantTrend === 'IMPULSE_BEARISH';
+
+    const conditions = [
+      ...selectedRules.map((r, idx) => ({
+        name: `${r.rule}: ${r.note}`,
+        satisfied: r.passed,
+        weight: baseRuleWeight + (idx < ruleRemainder ? 1 : 0),
+        isMandatory: idx === 0,
+      })),
+      {
+        name: isDirectionalBear
+          ? `Bearish Candle Close Confirmation`
+          : `Bullish Candle Close Confirmation`,
+        satisfied: isDirectionalBear ? isBearCandle : isDirectionalBull ? isBullCandle : false,
+        weight: 20,
+        isMandatory: true,
+      },
+    ];
 
     // Trade Signal Verification (Strict rules, no forcing)
-    // Bullish Entry:
-    // 1. Valid Bullish Impulse count with >= 80% rule satisfaction
-    // 2. Currently emerging from Wave 2 (start of Wave 3) or Wave 4 (start of Wave 5)
-    // 3. Candle close is bullish
     const lastBullWave = bullWaves[bullWaves.length - 1]?.label;
     const isBullTradeSetup =
       dominantTrend === 'IMPULSE_BULLISH' &&
+      (bullishRules[0]?.passed ?? false) &&
       bullRuleScore >= 75 &&
       (lastBullWave === '2' || lastBullWave === '4') &&
       isBullCandle;
@@ -452,13 +466,10 @@ export class ElliottWaveStrategy {
       };
     }
 
-    // Bearish Entry:
-    // 1. Valid Bearish Impulse count with >= 80% rule satisfaction
-    // 2. Currently emerging from Bearish Wave 2 or Wave 4
-    // 3. Candle close is bearish
     const lastBearWave = bearWaves[bearWaves.length - 1]?.label;
     const isBearTradeSetup =
       dominantTrend === 'IMPULSE_BEARISH' &&
+      (bearishRules[0]?.passed ?? false) &&
       bearRuleScore >= 75 &&
       (lastBearWave === '2' || lastBearWave === '4') &&
       isBearCandle;
@@ -473,7 +484,7 @@ export class ElliottWaveStrategy {
         strategyId: 'elliott_wave',
         strategyName: 'Ralph Nelson Elliott Wave',
         signal: 'DOWN',
-        score: (bearRuleScore / 100) * config.weight * 2,
+        score: -(bearRuleScore / 100) * config.weight * 2,
         weight: config.weight,
         reasons: [
           signalReason,

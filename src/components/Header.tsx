@@ -22,13 +22,13 @@ import {
   Wifi,
   WifiOff,
   Zap,
-  Smartphone,
   Bot,
 } from 'lucide-react';
 import { DiagnosticsInfo, Signal } from '../types';
 import { useLanguage, LanguageSwitcher } from '../i18n/LanguageContext';
 import { pocketOptionSessionStore } from '../services/PocketOptionSessionStore';
 import { accountStore } from '../services/AccountStore';
+import { BrandLogo } from './BrandLogo';
 
 interface HeaderProps {
   diagnostics: DiagnosticsInfo | null;
@@ -100,29 +100,6 @@ export const Header: React.FC<HeaderProps> = ({
       unsub2();
     };
   }, []);
-
-  const [isSwitchingAccount, setIsSwitchingAccount] = useState(false);
-  const handleToggleAccountMode = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (isSwitchingAccount) return;
-    try {
-      setIsSwitchingAccount(true);
-      const isCurrentlyDemo = account?.isDemo ?? (poSession.accountMode === 'DEMO');
-      const targetMode = isCurrentlyDemo ? 'REAL' : 'DEMO';
-      await fetch('/api/account/switch-mode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: targetMode }),
-      });
-      setTimeout(() => {
-        setIsSwitchingAccount(false);
-        if (onReconnect) onReconnect();
-      }, 1000);
-    } catch (err) {
-      setIsSwitchingAccount(false);
-      console.error('Failed to switch account mode:', err);
-    }
-  };
 
   const subsystems = diagnostics?.subsystems;
   const overall = subsystems?.overall || 'DISCONNECTED';
@@ -280,42 +257,30 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Title & Scope Badges */}
         <div className="flex items-center justify-between md:justify-start gap-2.5 sm:gap-3 min-w-0">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 font-black text-lg sm:text-xl shadow-lg shadow-amber-500/20 border border-amber-300">
-              S
-            </div>
+            <BrandLogo size="sm" className="sm:w-10 sm:h-10 shrink-0" />
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                <h1 className="text-sm sm:text-base font-black text-slate-100 tracking-tight bg-gradient-to-r from-amber-200 via-amber-400 to-amber-500 bg-clip-text text-transparent truncate">
-                  SABAA AI SOLUTION
+                <h1 className="text-sm sm:text-base font-black text-slate-100 tracking-tight bg-gradient-to-r from-emerald-200 via-emerald-400 to-amber-400 bg-clip-text text-transparent truncate">
+                  SABAA QUANT
                 </h1>
-                <span className="px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[9px] font-bold tracking-wider uppercase rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/30 flex items-center gap-1 whitespace-nowrap">
-                  <ShieldAlert className="w-2.5 h-2.5 shrink-0" />
+                <span className="px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[9px] font-bold tracking-wider uppercase rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 whitespace-nowrap">
+                  <ShieldCheck className="w-2.5 h-2.5 shrink-0" />
                   <span className="hidden xs:inline sm:inline">
-                    {isRTL ? 'تحليل استشاري • تنفيذ يدوي حصري' : t('appSubtitle', 'Advisory • Manual Execution')}
+                    {isRTL ? 'محرك كمي • حساب حقيقي' : 'Quantitative Engine • Real Live'}
                   </span>
                   <span className="xs:hidden sm:hidden">
-                    {isRTL ? 'استشاري' : 'Advisory'}
+                    {isRTL ? 'كمي' : 'Quant'}
                   </span>
                 </span>
               </div>
               <p className="text-[10px] sm:text-[11px] text-slate-400 truncate hidden sm:block">
-                {t('appSubtitle', 'Institutional algorithmic engine, computer vision analysis, multi-strategy confluence, and risk management')}
+                {t('appSubtitle', 'Institutional algorithmic quantitative engine, multi-strategy confluence, and risk management')}
               </p>
             </div>
           </div>
 
           {/* Quick Actions for small screens on top row */}
           <div className="flex items-center gap-1.5 md:hidden shrink-0">
-            {onOpenAndroidInstall && (
-              <button
-                onClick={onOpenAndroidInstall}
-                className="p-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs font-bold flex items-center gap-1"
-                title="تنزيل تطبيق أندرويد APK"
-              >
-                <Smartphone className="w-3.5 h-3.5" />
-                <span className="text-[10px]">APK</span>
-              </button>
-            )}
             <LanguageSwitcher />
             <button
               onClick={onOpenSettings}
@@ -337,39 +302,25 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Subsystem Overall Badge */}
           {getStatusBadge()}
 
-          {/* Real Account Info Pill with Click-to-Switch */}
+          {/* Real Account Info Pill */}
           {account && (
-            <button
+            <div
               id="header-account-pill"
-              type="button"
-              onClick={handleToggleAccountMode}
-              disabled={isSwitchingAccount}
-              className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 rounded-full bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-amber-500/50 text-slate-300 text-[10px] sm:text-[11px] max-w-[240px] sm:max-w-none truncate cursor-pointer transition-all shadow-sm"
+              className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 rounded-full bg-slate-900 border border-emerald-500/30 text-slate-300 text-[10px] sm:text-[11px] max-w-[240px] sm:max-w-none truncate shadow-sm tabular-nums"
               title={
                 diagnostics?.authVerified
-                  ? (isRTL ? `الحساب الحالي: ${account.isDemo ? 'تجريبي' : 'حقيقي'} ($${effectiveBalance?.toFixed(2) || '0.00'}) - اضغط هنا للتبديل الفوري بين الحقيقي والتجريبي` : `Current: ${account.isDemo ? 'DEMO' : 'REAL'} ($${effectiveBalance?.toFixed(2) || '0.00'}) - Click to toggle between Real & Demo`)
-                  : 'Account data from broker protocol'
+                  ? (isRTL ? `الحساب الحقيقي النشط ($${effectiveBalance?.toFixed(2) || '0.00'})` : `Active Real Account ($${effectiveBalance?.toFixed(2) || '0.00'})`)
+                  : 'Real account session status'
               }
             >
-              {isSwitchingAccount ? (
-                <span className="flex items-center gap-1 text-[9px] text-amber-300 font-bold">
-                  <RefreshCw className="w-2.5 h-2.5 animate-spin text-amber-400" />
-                  <span>{isRTL ? 'تبديل...' : 'Switching...'}</span>
-                </span>
-              ) : subsystems?.auth === 'failed' || account.status === 'INVALID' || account.status === 'EXPIRED' ? (
+              {subsystems?.auth === 'failed' || account.status === 'INVALID' || account.status === 'EXPIRED' ? (
                 <span className="px-1.5 py-0.2 rounded text-[8px] sm:text-[9px] font-bold uppercase bg-rose-500/15 text-rose-400 border border-rose-500/30 font-sans">
                   {t('header.unauthorized', 'UNAUTHORIZED')}
                 </span>
               ) : diagnostics?.authVerified ? (
-                <span
-                  className={`px-1.5 py-0.2 rounded text-[8px] sm:text-[9px] font-bold uppercase font-sans flex items-center gap-1 ${
-                    account.isDemo
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                  }`}
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full ${account.isDemo ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`} />
-                  {account.isDemo ? 'DEMO' : 'REAL'}
+                <span className="px-1.5 py-0.2 rounded text-[8px] sm:text-[9px] font-bold uppercase font-sans flex items-center gap-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  REAL LIVE
                 </span>
               ) : (
                 <span className="px-1.5 py-0.2 rounded text-[8px] sm:text-[9px] font-bold uppercase bg-slate-800 text-slate-400 border border-slate-700 font-sans">
@@ -378,7 +329,7 @@ export const Header: React.FC<HeaderProps> = ({
               )}
 
               {effectiveBalance !== null && typeof effectiveBalance === 'number' && !isNaN(effectiveBalance) ? (
-                <span className={`font-bold ${account.isDemo || poSession.accountMode === 'DEMO' ? 'text-amber-400' : 'text-emerald-400 font-mono'}`}>
+                <span className="font-bold text-emerald-400 font-mono tabular-nums">
                   ${effectiveBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               ) : isBalanceLoading ? (
@@ -389,7 +340,7 @@ export const Header: React.FC<HeaderProps> = ({
               ) : (
                 <span className="text-slate-500">N/A</span>
               )}
-            </button>
+            </div>
           )}
 
           {/* Latency badge */}
@@ -490,20 +441,6 @@ export const Header: React.FC<HeaderProps> = ({
             <RefreshCw className={`w-3.5 h-3.5 ${isReconnecting ? 'animate-spin text-amber-400' : ''}`} />
             <span className="hidden sm:inline">{t('header.reconnect', 'Resync')}</span>
           </button>
-
-          {/* Mobile & Desktop App Install Button */}
-          {onOpenAndroidInstall && (
-            <button
-              id="btn-install-app-header"
-              onClick={onOpenAndroidInstall}
-              className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-xs font-sans font-bold transition-all cursor-pointer shadow-sm"
-              title="تثبيت التطبيق على الهاتف (PWA & APK)"
-            >
-              <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden sm:inline">تثبيت التطبيق</span>
-              <span className="sm:hidden text-[10px]">تثبيت</span>
-            </button>
-          )}
 
           {/* Session / Settings button (Desktop) */}
           <button

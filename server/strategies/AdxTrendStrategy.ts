@@ -1,4 +1,4 @@
-import { Candle, StrategyResult } from '../types';
+import { Candle, StrategyResult, StrategyCondition } from '../types';
 import { calculateADX } from '../indicators';
 
 export interface AdxTrendConfig {
@@ -75,19 +75,42 @@ export class AdxTrendStrategy {
     const isBullishDI = adxData.plusDI > adxData.minusDI;
     const isBearishDI = adxData.minusDI > adxData.plusDI;
 
-    const conditions = [
-      { name: `ADX (${adxData.adx.toFixed(1)}) >= ${config.threshold} (Strong Trend)`, satisfied: isStrongTrend, weight: 40 },
-      { name: `+DI (${adxData.plusDI.toFixed(1)}) > -DI (${adxData.minusDI.toFixed(1)})`, satisfied: isBullishDI, weight: 60 },
-      { name: `-DI (${adxData.minusDI.toFixed(1)}) > +DI (${adxData.plusDI.toFixed(1)})`, satisfied: isBearishDI, weight: 60 },
+    const bullishConditions: StrategyCondition[] = [
+      {
+        id: 'adx_strength_bull',
+        name: `ADX (${adxData.adx.toFixed(1)}) >= ${config.threshold} (Strong Trend)`,
+        satisfied: isStrongTrend,
+        weight: 40,
+        isMandatory: true,
+      },
+      {
+        id: 'adx_plus_di',
+        name: `+DI (${adxData.plusDI.toFixed(1)}) > -DI (${adxData.minusDI.toFixed(1)})`,
+        satisfied: isBullishDI,
+        weight: 60,
+        isMandatory: true,
+      },
     ];
 
-    let bullishScore = 0;
-    if (isStrongTrend) bullishScore += 40;
-    if (isBullishDI) bullishScore += 60;
+    const bearishConditions: StrategyCondition[] = [
+      {
+        id: 'adx_strength_bear',
+        name: `ADX (${adxData.adx.toFixed(1)}) >= ${config.threshold} (Strong Trend)`,
+        satisfied: isStrongTrend,
+        weight: 40,
+        isMandatory: true,
+      },
+      {
+        id: 'adx_minus_di',
+        name: `-DI (${adxData.minusDI.toFixed(1)}) > +DI (${adxData.plusDI.toFixed(1)})`,
+        satisfied: isBearishDI,
+        weight: 60,
+        isMandatory: true,
+      },
+    ];
 
-    let bearishScore = 0;
-    if (isStrongTrend) bearishScore += 40;
-    if (isBearishDI) bearishScore += 60;
+    const bullishScore = bullishConditions.reduce((acc, c) => acc + (c.satisfied ? c.weight : 0), 0);
+    const bearishScore = bearishConditions.reduce((acc, c) => acc + (c.satisfied ? c.weight : 0), 0);
 
     if (isStrongTrend && isBullishDI) {
       return {
@@ -97,7 +120,7 @@ export class AdxTrendStrategy {
         score: (bullishScore / 100) * config.weight * 2,
         weight: config.weight,
         reasons: [
-          `Strong Bullish Trend: ADX ${adxData.adx.toFixed(1)} > ${config.threshold} with +DI (${adxData.plusDI.toFixed(1)}) dominant over -DI (${adxData.minusDI.toFixed(1)})`,
+          `Strong Bullish Trend: ADX ${adxData.adx.toFixed(1)} >= ${config.threshold} with +DI (${adxData.plusDI.toFixed(1)}) > -DI (${adxData.minusDI.toFixed(1)})`,
         ],
         candleTimestamp,
         dataValid: true,
@@ -105,7 +128,7 @@ export class AdxTrendStrategy {
         bearishScore,
         percentage: bullishScore,
         direction: 'BULLISH',
-        conditions,
+        conditions: bullishConditions,
       };
     }
 
@@ -117,7 +140,7 @@ export class AdxTrendStrategy {
         score: -(bearishScore / 100) * config.weight * 2,
         weight: config.weight,
         reasons: [
-          `Strong Bearish Trend: ADX ${adxData.adx.toFixed(1)} > ${config.threshold} with -DI (${adxData.minusDI.toFixed(1)}) dominant over +DI (${adxData.plusDI.toFixed(1)})`,
+          `Strong Bearish Trend: ADX ${adxData.adx.toFixed(1)} >= ${config.threshold} with -DI (${adxData.minusDI.toFixed(1)}) > +DI (${adxData.plusDI.toFixed(1)})`,
         ],
         candleTimestamp,
         dataValid: true,
@@ -125,7 +148,7 @@ export class AdxTrendStrategy {
         bearishScore,
         percentage: bearishScore,
         direction: 'BEARISH',
-        conditions,
+        conditions: bearishConditions,
       };
     }
 
@@ -138,11 +161,11 @@ export class AdxTrendStrategy {
       reasons: [`ADX (${adxData.adx.toFixed(1)}) below threshold ${config.threshold}: Market in non-trending/ranging phase`],
       candleTimestamp,
       dataValid: true,
-      bullishScore: 20,
-      bearishScore: 20,
+      bullishScore,
+      bearishScore,
       percentage: Math.max(bullishScore, bearishScore),
       direction: 'NEUTRAL',
-      conditions,
+      conditions: isBullishDI ? bullishConditions : bearishConditions,
     };
   }
 }

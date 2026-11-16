@@ -16,6 +16,7 @@ import { SbaaPatternDetector } from './SbaaPatternDetector';
 import { SbaaScoringEngine } from './SbaaScoringEngine';
 import { SbaaRiskGuardian } from './SbaaRiskGuardian';
 import { calculateEMA, calculateRSI } from '../indicators';
+import { StrategyEngine } from '../StrategyEngine';
 import { EmaTrendStrategy } from '../strategies/EmaTrendStrategy';
 import { RsiMomentumStrategy } from '../strategies/RsiMomentumStrategy';
 import { MacdStrategy } from '../strategies/MacdStrategy';
@@ -209,15 +210,27 @@ export class SbaaStrategyEngine {
     asset: string,
     timeframe: number,
     candlesOverride?: Candle[],
-    options?: { autoExecute?: boolean }
+    options?: { autoExecute?: boolean; readOnly?: boolean; ignoreConnectionGate?: boolean }
   ): SbaaDetectionLogRecord {
-    this.lastAnalysisTimestamp = Date.now();
-    this.state = 'SCANNING';
+    const isReadOnly = Boolean(options?.readOnly);
+    if (!isReadOnly) {
+      this.lastAnalysisTimestamp = Date.now();
+      this.state = 'SCANNING';
+    }
 
-    const candles =
+    const rawStoreCandles =
       candlesOverride ||
-      (this.marketDataStore ? this.marketDataStore.getCandles(asset, timeframe) : []) ||
-      this.candleBuilder.getCandles(asset, timeframe);
+      (this.marketDataStore
+        ? this.config.requireClosedCandle
+          ? this.marketDataStore.getClosedCandlesFor(asset, timeframe)
+          : this.marketDataStore.getCandles(asset, timeframe)
+        : []);
+    const candles =
+      rawStoreCandles && rawStoreCandles.length > 0
+        ? rawStoreCandles
+        : this.config.requireClosedCandle
+        ? this.candleBuilder.getClosedCandles(asset, timeframe)
+        : this.candleBuilder.getCandles(asset, timeframe);
 
     if (candles.length < 15) {
       this.state = 'NO_TRADE';
@@ -252,7 +265,9 @@ export class SbaaStrategyEngine {
         reasonEn: 'WAIT: Insufficient candle data',
         tradeStatus: 'NOT_TRIGGERED',
       };
-      this.logDetection(logRecord);
+      if (!isReadOnly) {
+        this.logDetection(logRecord);
+      }
       return logRecord;
     }
 
@@ -291,7 +306,25 @@ export class SbaaStrategyEngine {
       DarvasBoxStrategy.evaluate(candles),
     ];
 
-    const qualifiedStrats = rawStratResults.filter((s) => s.qualified && (s.signal === 'UP' || s.signal === 'DOWN'));
+    const lastCandle = candles[candles.length - 1];
+    const prevCandle = candles.length > 1 ? candles[candles.length - 2] : null;
+    const isClosedCandle = lastCandle ? lastCandle.isClosed !== false : true;
+    const stratContext = {
+      symbol: asset,
+      timeframe,
+      candles,
+      currentCandle: lastCandle,
+      previousCandle: prevCandle,
+      lastTickTimestamp: (lastCandle?.time || 0) * 1000,
+      lastCandleTimestamp: lastCandle?.time || 0,
+      dataFreshness: 0,
+      currentPrice: lastCandle?.close || 0,
+    };
+    const enrichedStratResults = rawStratResults.map((s) =>
+      StrategyEngine.enrichResult(s, lastCandle.close, stratContext)
+    );
+
+    const qualifiedStrats = enrichedStratResults.filter((s) => s.qualified && (s.signal === 'UP' || s.signal === 'DOWN'));
     const upStrats = qualifiedStrats.filter((s) => s.signal === 'UP');
     const downStrats = qualifiedStrats.filter((s) => s.signal === 'DOWN');
 
@@ -301,7 +334,7 @@ export class SbaaStrategyEngine {
         (a, b) => (b.normalizedScore ?? b.rawScore ?? 0) - (a.normalizedScore ?? a.rawScore ?? 0)
       )[0];
 
-      if (topStrat && (upStrats.length >= downStrats.length || downStrats.length >= upStrats.length)) {
+      if (topStrat && !(upStrats.length >= 2 && downStrats.length >= 2)) {
         const dir = topStrat.signal === 'UP' ? 'BUY' : 'SELL';
         pattern = {
           type: (topStrat.strategyId.toUpperCase().replace(/[^A-Z0-9_]/g, '_')) as any,
@@ -318,35 +351,41 @@ export class SbaaStrategyEngine {
       }
     }
 
-    if (pattern) {
-      this.patternsDetectedCount++;
-      this.state = 'PATTERN_DETECTED';
-    }
+    if (!isReadOnly) {
+      if (pattern) {
+        this.patternsDetectedCount++;
+        this.state = 'PATTERN_DETECTED';
+      }
 
-    // Step 2 & 3: Multi-Timeframe synthesis
-    this.state = 'TREND_VALIDATION';
-    const mtfState = this.calculateMtfState(asset, timeframe * 5); // 5x higher timeframe
+      // Step 2 & 3: Multi-Timeframe synthesis
+      this.state = 'TREND_VALIDATION';
+    }
+    const mtfState = this.calculateMtfState(asset, timeframe * 5, timeframe, candles); // 5x higher timeframe
 
     // Step 4: Scoring and No-Trade Filters
-    this.state = 'SIGNAL_SCORING';
+    if (!isReadOnly) {
+      this.state = 'SIGNAL_SCORING';
+    }
     const evalResult = SbaaScoringEngine.evaluate({
       candles,
       pattern,
       timeframe,
       mtfState,
-      isClosedCandle: true,
-      isConnected: this.poService ? this.poService.isConnected() : true,
+      isClosedCandle,
+      isConnected: options?.ignoreConnectionGate ? true : (this.poService ? this.poService.isConnected() : true),
       isStaleData: false,
       recentSignalsHistory: this.recentExecutedSignals,
     });
 
     // Update Decision Counters
-    if (evalResult.decision === 'BUY') {
-      this.buySignalsCount++;
-    } else if (evalResult.decision === 'SELL') {
-      this.sellSignalsCount++;
-    } else {
-      this.waitDecisionsCount++;
+    if (!isReadOnly) {
+      if (evalResult.decision === 'BUY') {
+        this.buySignalsCount++;
+      } else if (evalResult.decision === 'SELL') {
+        this.sellSignalsCount++;
+      } else {
+        this.waitDecisionsCount++;
+      }
     }
 
     const logRecord: SbaaDetectionLogRecord = {
@@ -370,7 +409,7 @@ export class SbaaStrategyEngine {
     };
 
     // Step 5: Risk Validation & Auto Demo Execution (strictly single-orchestrated, never dual-worker)
-    if (options?.autoExecute && evalResult.isQualifiedForDemo && this.config.autoDemoExecution && evalResult.decision !== 'WAIT') {
+    if (!isReadOnly && options?.autoExecute && evalResult.isQualifiedForDemo && this.config.autoDemoExecution && evalResult.decision !== 'WAIT') {
       this.state = 'RISK_VALIDATION';
       const riskCheck = this.riskGuardian.validateTradeExecution({
         amount: this.config.baseTradeAmount,
@@ -388,19 +427,76 @@ export class SbaaStrategyEngine {
         logRecord.rejectionReason = riskCheck.reasonAr;
         logRecord.reasonAr += ` [تم رفض التنفيذ التجريبي: ${riskCheck.reasonAr}]`;
       }
-    } else {
+    } else if (!isReadOnly) {
       this.state = evalResult.decision === 'WAIT' ? 'SCANNING' : 'NO_TRADE';
     }
 
-    this.logDetection(logRecord);
-    this.persistData();
-    this.notifyUpdate();
+    if (!isReadOnly) {
+      this.logDetection(logRecord);
+      this.persistData();
+      this.notifyUpdate();
+    }
 
     return logRecord;
   }
 
-  private calculateMtfState(asset: string, mtfTimeframe: number): SbaaMtfState {
-    const candles = this.candleBuilder.getCandles(asset, mtfTimeframe);
+  private resampleMtfCandles(asset: string, baseCandles: Candle[], baseTf: number, mtfTimeframe: number): Candle[] {
+    if (!baseCandles || baseCandles.length < 15 || baseTf <= 0 || mtfTimeframe <= baseTf) {
+      return [];
+    }
+    const buckets = new Map<number, { candles: Candle[] }>();
+    for (const c of baseCandles) {
+      const bucketTime = Math.floor(c.time / mtfTimeframe) * mtfTimeframe;
+      let entry = buckets.get(bucketTime);
+      if (!entry) {
+        entry = { candles: [] };
+        buckets.set(bucketTime, entry);
+      }
+      entry.candles.push(c);
+    }
+
+    const expectedPerBucket = Math.max(1, Math.round(mtfTimeframe / baseTf));
+    const sortedTimes = Array.from(buckets.keys()).sort((a, b) => a - b);
+    const resampled: Candle[] = [];
+
+    for (let i = 0; i < sortedTimes.length; i++) {
+      const bucketTime = sortedTimes[i];
+      const group = buckets.get(bucketTime)!.candles;
+      const isLast = i === sortedTimes.length - 1;
+      // Only include completed MTF buckets (zero look-ahead / zero partial bias)
+      if (isLast && group.length < expectedPerBucket) {
+        continue;
+      }
+      const open = group[0].open;
+      const close = group[group.length - 1].close;
+      let high = group[0].high;
+      let low = group[0].low;
+      let volume = 0;
+      for (const item of group) {
+        if (item.high > high) high = item.high;
+        if (item.low < low) low = item.low;
+        volume += item.volume || 0;
+      }
+      resampled.push({
+        asset,
+        timeframe: mtfTimeframe,
+        time: bucketTime,
+        open,
+        high,
+        low,
+        close,
+        volume,
+        isClosed: true,
+      });
+    }
+    return resampled;
+  }
+
+  private calculateMtfState(asset: string, mtfTimeframe: number, baseTf?: number, baseCandles?: Candle[]): SbaaMtfState {
+    let candles = this.candleBuilder.getCandles(asset, mtfTimeframe);
+    if ((!candles || candles.length < 15) && baseCandles && baseTf) {
+      candles = this.resampleMtfCandles(asset, baseCandles, baseTf, mtfTimeframe);
+    }
     if (!candles || candles.length < 15) {
       return {
         timeframe: mtfTimeframe,

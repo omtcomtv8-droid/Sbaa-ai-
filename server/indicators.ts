@@ -260,11 +260,13 @@ export function calculateADX(
 
   if (dxList.length < period) return null;
 
-  // Final ADX is smoothed DX
-  const adxSeries = calculateEMASeries(dxList, period);
-  if (adxSeries.length === 0) return null;
+  // Final ADX uses Wilder's smoothed moving average of DX
+  let adx = dxList.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  for (let i = period; i < dxList.length; i++) {
+    adx = (adx * (period - 1) + dxList[i]) / period;
+  }
 
-  const adxVal = Number(adxSeries[adxSeries.length - 1].toFixed(2));
+  const adxVal = Number(adx.toFixed(2));
   const lastPlusDI = Number(((smoothPlusDM / (smoothTR || 1)) * 100).toFixed(2));
   const lastMinusDI = Number(((smoothMinusDM / (smoothTR || 1)) * 100).toFixed(2));
 
@@ -442,7 +444,11 @@ export function calculateParabolicSAR(
 
     sar = sar + af * (ep - sar);
 
+    // Wilder's 2-prior-bar SAR clamping rule
     if (isUpTrend) {
+      sar = i >= 2
+        ? Math.min(sar, prevCandle.low, candles[i - 2].low)
+        : Math.min(sar, prevCandle.low);
       if (currCandle.low < sar) {
         // Trend reverses to DOWN
         isUpTrend = false;
@@ -456,6 +462,9 @@ export function calculateParabolicSAR(
         }
       }
     } else {
+      sar = i >= 2
+        ? Math.max(sar, prevCandle.high, candles[i - 2].high)
+        : Math.max(sar, prevCandle.high);
       if (currCandle.high > sar) {
         // Trend reverses to UP
         isUpTrend = true;

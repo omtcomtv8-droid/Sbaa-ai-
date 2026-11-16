@@ -1,5 +1,287 @@
 [
   {
+    "id": "sbaa_1794648906125_0acer",
+    "asset": "EURUSD_otc",
+    "marketType": "OTC",
+    "timeframe": 60,
+    "patternType": "RSI_MOMENTUM",
+    "patternNameAr": "استراتيجية سبع المدمجة (RSI Momentum)",
+    "patternNameEn": "SBAA Integrated (RSI Momentum)",
+    "direction": "WAIT",
+    "srZone": "دعم: 1.08180 | مقاومة: 1.08220",
+    "confluenceScore": 50,
+    "scoreBreakdown": {
+      "trendScore": 0,
+      "srLocationScore": 15,
+      "patternScore": 15,
+      "wickLiquidityScore": 10,
+      "structureScore": 5,
+      "momentumScore": 0,
+      "mtfScore": 5,
+      "totalScore": 50,
+      "verdict": "IGNORE",
+      "reasons": [
+        "السعر يتواجد داخل حيز منطقة الدعم (1.08180)",
+        "نموذج فني قوي مكتمل ومؤكد: استراتيجية سبع المدمجة (RSI Momentum)",
+        "رفض سعري سفلي قوي جداً (فتيلة تمثل 50% من الشمعة)",
+        "الإطار الزمني الأكبر في حالة تذبذب عرضي"
+      ],
+      "blockers": [
+        "ظهور شمعة دوجي (Doji) وتردد سعري حاد دون اتجاه واضح. حظر الدخول حتى تتشكل شمعة تأكيد صريحة.",
+        "انقطاع اتصال مقبس الويب المباشر. حظر إصدار أو تنفيذ أي إشارة آلية."
+      ]
+    },
+    "detectionTime": 1794648906125,
+    "confirmationTime": 1794648906125,
+    "systemDecision": "WAIT",
+    "reasonAr": "WAIT: تم تعليق الإشارة لوجود شروط منع إلزامية: ظهور شمعة دوجي (Doji) وتردد سعري حاد دون اتجاه واضح. حظر الدخول حتى تتشكل شمعة تأكيد صريحة.",
+    "reasonEn": "WAIT: Decision withheld due to mandatory rule: ظهور شمعة دوجي (Doji) وتردد سعري حاد دون اتجاه واضح. حظر الدخول حتى تتشكل شمعة تأكيد صريحة.",
+    "tradeStatus": "NOT_TRIGGERED"
+  },
+  {
+    "id": "sbaa_1794648864283_mjkat",
+    "asset": "EURUSD_otc",
+    "marketType": "OTC",
+    "timeframe": 60,
+    "patternType": "RSI_MOMENTUM",
+    "patternNameAr": "استراتيجية سبع المدمجة (RSI Momentum)",
+    "patternNameEn": "SBAA Integrated (RSI Momentum)",
+    "direction": "WAIT",
+    "srZone": "دعم: 1.08180 | مقاومة: 1.08220",
+    "confluenceScore": 50,
+    "scoreBreakdown": {
+      "trendScore": 0,
+      "srLocationScore": 15,
+      "patternScore": 15,
+      "wickLiquidityScore": 10,
+      "structureScore": 5,
+      "momentumScore": 0,
+      "mtfScore": 5,
+      "totalScore": 50,
+      "verdict": "IGNORE",
+      "reasons": [
+        "السعر يتواجد داخل حيز منطقة الدعم (1.08180)",
+        "نموذج فني قوي مكتمل ومؤكد: استراتيجية سبع المدمجة (RSI Momentum)",
+        "رفض سعري سفلي قوي جداً (فتيلة تمثل 50% من الشمعة)",
+        "الإطار الزمني الأكبر في حالة تذبذب عرضي"
+      ],
+      "blockers": [
+        "ظهور شمعة دوجي (Doji) وتردد سعري حاد دون اتجاه واضح. حظر الدخول حتى تتشكل شمعة تأكيد صريحة.",
+        "انقطاع اتصال مقبس الويب المباشر. حظر إصدار أو تنفيذ أي إشارة آلية."
+      ]
+    },
+    "detectionTime": 1794648864283,
+    "confirmationTime": 1794648864283,
+    "systemDecision": "WAIT",
+    "reasonAr": "WAIT: تم تعليق الإشارة لوجود شروط منع إلزامية: ظهور شمعة دوجي (Doji) وتردد سعري حاد دون اتجاه واضح. حظر الدخول حتى تتشكل شمعة تأكيد صريحة.",
+    "reasonEn": "WAIT: Decision withheld due to mandatory rule: ظهور شمعة دوجي (Doji) وتردد سعري حاد دون اتجاه واضح. حظر الدخول حتى تتشكل شمعة تأكيد صريحة.",
+    "tradeStatus": "NOT_TRIGGERED"
+  },
+  {
+    "id": "sbaa_1794648697368_6946p",
+    "asset": "EURUSD_otc",
+    "marketType": "OTC",
+    "timeframe": 60,
+    "patternType": "RSI_MOMENTUM",
+    "patternNameAr": "استراتيجية سبع المدمجة (RSI Momentum)",
+    "patternNameEn": "SBAA Integrated (RSI Momentum)",
+    "direction": "WAIT",
+    "srZone": "دعم: 1.08180 | مقاومة: 1.08220",
+    "confluenceScore": 50,
+    "scoreBreakdown": {
+      "trendScore": 0,
+      "srLocationScore": 15,
+      "patternScore": 15,
+      "wickLiquidityScore": 10,
+      "structureScore": 5,
+      "momentumScore": 0,
+      "mtfScore": 5,
+      "totalScore": 50,
+      "verdict": "IGNORE",
+      "reasons": [
+        "السعر يتواجد داخل حيز منطقة الدعم (1.08180)",
+        "نموذج فني قوي مكتمل ومؤكد: استراتيجية سبع المدمجة (RSI Momentum)",
+        "رفض سعري سفلي قوي جداً (فتيلة تمثل 50% من الشمعة)",
+        "الإطار الزمني الأكبر في حالة تذبذب عرضي"
+      ],
+      "blockers": [
+        "ظهور شمعة دوجي (Doji) وتردد سعري حاد دون اتجاه واضح. حظر الدخول حتى تتشكل شمعة تأكيد صريحة.",
+        "انقطاع اتصال مقبس الويب المباشر. حظر إصدار أو تنفيذ أي إشارة آلية."
+      ]
+    },
+    "detectionTime": 1794648697368,
+    "confirmationTime": 1794648697368,
+    "systemDecision": "WAIT",
+    "reasonAr": "WAIT: تم تعليق الإشارة لوجود شروط منع إلزامية: ظهور شمعة دوجي (Doji) وتردد سعري حاد دون اتجاه واضح. حظر الدخول حتى تتشكل شمعة تأكيد صريحة.",
+    "reasonEn": "WAIT: Decision withheld due to mandatory rule: ظهور شمعة دوجي (Doji) وتردد سعري حاد دون اتجاه واضح. حظر الدخول حتى تتشكل شمعة تأكيد صريحة.",
+    "tradeStatus": "NOT_TRIGGERED"
+  },
+  {
+    "id": "sbaa_1794562772259_n1wqm",
+    "asset": "EURUSD_otc",
+    "marketType": "OTC",
+    "timeframe": 60,
+    "patternType": "NO_PATTERN",
+    "patternNameAr": "بيانات غير كافية",
+    "patternNameEn": "Insufficient Data",
+    "direction": "WAIT",
+    "srZone": "غير محددة",
+    "confluenceScore": 0,
+    "scoreBreakdown": {
+      "trendScore": 0,
+      "srLocationScore": 0,
+      "patternScore": 0,
+      "wickLiquidityScore": 0,
+      "structureScore": 0,
+      "momentumScore": 0,
+      "mtfScore": 0,
+      "totalScore": 0,
+      "verdict": "IGNORE",
+      "reasons": [],
+      "blockers": [
+        "بيانات الشموع غير كافية لبدء التحليل الفني"
+      ]
+    },
+    "detectionTime": 1794562772259,
+    "confirmationTime": 1794562772259,
+    "systemDecision": "WAIT",
+    "reasonAr": "WAIT: بيانات الشموع غير كافية لتحليل النماذج (أقل من 15 شمعة)",
+    "reasonEn": "WAIT: Insufficient candle data",
+    "tradeStatus": "NOT_TRIGGERED"
+  },
+  {
+    "id": "sbaa_1794562740645_6x8ys",
+    "asset": "EURUSD_otc",
+    "marketType": "OTC",
+    "timeframe": 60,
+    "patternType": "NO_PATTERN",
+    "patternNameAr": "بيانات غير كافية",
+    "patternNameEn": "Insufficient Data",
+    "direction": "WAIT",
+    "srZone": "غير محددة",
+    "confluenceScore": 0,
+    "scoreBreakdown": {
+      "trendScore": 0,
+      "srLocationScore": 0,
+      "patternScore": 0,
+      "wickLiquidityScore": 0,
+      "structureScore": 0,
+      "momentumScore": 0,
+      "mtfScore": 0,
+      "totalScore": 0,
+      "verdict": "IGNORE",
+      "reasons": [],
+      "blockers": [
+        "بيانات الشموع غير كافية لبدء التحليل الفني"
+      ]
+    },
+    "detectionTime": 1794562740645,
+    "confirmationTime": 1794562740645,
+    "systemDecision": "WAIT",
+    "reasonAr": "WAIT: بيانات الشموع غير كافية لتحليل النماذج (أقل من 15 شمعة)",
+    "reasonEn": "WAIT: Insufficient candle data",
+    "tradeStatus": "NOT_TRIGGERED"
+  },
+  {
+    "id": "sbaa_1794561906875_8fooz",
+    "asset": "EURUSD_otc",
+    "marketType": "OTC",
+    "timeframe": 60,
+    "patternType": "NO_PATTERN",
+    "patternNameAr": "بيانات غير كافية",
+    "patternNameEn": "Insufficient Data",
+    "direction": "WAIT",
+    "srZone": "غير محددة",
+    "confluenceScore": 0,
+    "scoreBreakdown": {
+      "trendScore": 0,
+      "srLocationScore": 0,
+      "patternScore": 0,
+      "wickLiquidityScore": 0,
+      "structureScore": 0,
+      "momentumScore": 0,
+      "mtfScore": 0,
+      "totalScore": 0,
+      "verdict": "IGNORE",
+      "reasons": [],
+      "blockers": [
+        "بيانات الشموع غير كافية لبدء التحليل الفني"
+      ]
+    },
+    "detectionTime": 1794561906875,
+    "confirmationTime": 1794561906875,
+    "systemDecision": "WAIT",
+    "reasonAr": "WAIT: بيانات الشموع غير كافية لتحليل النماذج (أقل من 15 شمعة)",
+    "reasonEn": "WAIT: Insufficient candle data",
+    "tradeStatus": "NOT_TRIGGERED"
+  },
+  {
+    "id": "sbaa_1794561543393_zf8d9",
+    "asset": "EURUSD_otc",
+    "marketType": "OTC",
+    "timeframe": 60,
+    "patternType": "NO_PATTERN",
+    "patternNameAr": "بيانات غير كافية",
+    "patternNameEn": "Insufficient Data",
+    "direction": "WAIT",
+    "srZone": "غير محددة",
+    "confluenceScore": 0,
+    "scoreBreakdown": {
+      "trendScore": 0,
+      "srLocationScore": 0,
+      "patternScore": 0,
+      "wickLiquidityScore": 0,
+      "structureScore": 0,
+      "momentumScore": 0,
+      "mtfScore": 0,
+      "totalScore": 0,
+      "verdict": "IGNORE",
+      "reasons": [],
+      "blockers": [
+        "بيانات الشموع غير كافية لبدء التحليل الفني"
+      ]
+    },
+    "detectionTime": 1794561543393,
+    "confirmationTime": 1794561543393,
+    "systemDecision": "WAIT",
+    "reasonAr": "WAIT: بيانات الشموع غير كافية لتحليل النماذج (أقل من 15 شمعة)",
+    "reasonEn": "WAIT: Insufficient candle data",
+    "tradeStatus": "NOT_TRIGGERED"
+  },
+  {
+    "id": "sbaa_1794561028629_l1vox",
+    "asset": "EURUSD_otc",
+    "marketType": "OTC",
+    "timeframe": 60,
+    "patternType": "NO_PATTERN",
+    "patternNameAr": "بيانات غير كافية",
+    "patternNameEn": "Insufficient Data",
+    "direction": "WAIT",
+    "srZone": "غير محددة",
+    "confluenceScore": 0,
+    "scoreBreakdown": {
+      "trendScore": 0,
+      "srLocationScore": 0,
+      "patternScore": 0,
+      "wickLiquidityScore": 0,
+      "structureScore": 0,
+      "momentumScore": 0,
+      "mtfScore": 0,
+      "totalScore": 0,
+      "verdict": "IGNORE",
+      "reasons": [],
+      "blockers": [
+        "بيانات الشموع غير كافية لبدء التحليل الفني"
+      ]
+    },
+    "detectionTime": 1794561028629,
+    "confirmationTime": 1794561028629,
+    "systemDecision": "WAIT",
+    "reasonAr": "WAIT: بيانات الشموع غير كافية لتحليل النماذج (أقل من 15 شمعة)",
+    "reasonEn": "WAIT: Insufficient candle data",
+    "tradeStatus": "NOT_TRIGGERED"
+  },
+  {
     "id": "sbaa_1793731424077_rxjrz",
     "asset": "USDJPY_otc",
     "marketType": "OTC",

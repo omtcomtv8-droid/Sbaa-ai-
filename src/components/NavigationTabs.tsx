@@ -3,13 +3,10 @@ import { ViewTab } from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
 import {
   Activity,
-  BarChart2,
   Bot,
-  Brain,
   Compass,
   Cpu,
   Database,
-  Eye,
   Gauge,
   History,
   Home,
@@ -93,7 +90,7 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({
     {
       id: 'strategies',
       label: t('nav.strategies', 'Strategies'),
-      sublabel: t('nav.strategiesSub', '21 Algorithm Modules'),
+      sublabel: t('nav.strategiesSub', '26 Algorithm Modules'),
       icon: <Cpu className="w-4 h-4 text-indigo-400" />,
     },
     {
@@ -118,12 +115,12 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({
 
     {
       id: 'autotrader',
-      label: isRTL ? '🤖 بوت التداول الآلي' : '🤖 AI Auto Trader',
-      sublabel: isRTL ? 'نظام تداول متكامل' : 'Autonomous Trading Engine',
-      icon: <Bot className="w-4 h-4 text-emerald-400" />,
+      label: isRTL ? 'التداول الآلي الخوارزمي' : 'Algorithmic Auto Trader',
+      sublabel: isRTL ? 'محرك تداول كمي متكامل' : 'Quantitative Trading Engine',
+      icon: <Zap className="w-4 h-4 text-emerald-400" />,
       badge: (
         <span className="text-[9px] px-1.5 py-0.5 rounded font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-          BOT
+          QUANT
         </span>
       ),
     },
@@ -154,9 +151,9 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({
     },
     {
       id: 'account',
-      label: t('header.demoAccount', 'Account Context'),
-      sublabel: 'REAL / DEMO',
-      icon: <User className="w-4 h-4 text-amber-400" />,
+      label: t('header.realAccount', 'Real Account'),
+      sublabel: 'REAL LIVE',
+      icon: <User className="w-4 h-4 text-emerald-400" />,
     },
     {
       id: 'diagnostics',
@@ -169,28 +166,6 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({
       label: t('common.edit', 'Settings'),
       sublabel: 'SSD & Platform',
       icon: <Settings className="w-4 h-4 text-slate-300" />,
-    },
-  ];
-
-  // Secondary advanced tools for desktop side navigation
-  const advancedTools: { id: ViewTab; label: string; sublabel: string; icon: React.ReactNode }[] = [
-    {
-      id: 'ai_analysis',
-      label: t('nav.ai', 'SMC Engine'),
-      sublabel: t('nav.aiSub', 'Smart Market Structure'),
-      icon: <Brain className="w-4 h-4 text-amber-400" />,
-    },
-    {
-      id: 'vision',
-      label: t('nav.vision', 'Computer Vision'),
-      sublabel: t('nav.visionSub', 'Chart Pattern Recognition'),
-      icon: <Eye className="w-4 h-4 text-sky-400" />,
-    },
-    {
-      id: 'scanner',
-      label: t('nav.scanner', 'Market Scanner'),
-      sublabel: t('nav.scannerSub', 'Multi-Asset Opportunities'),
-      icon: <BarChart2 className="w-4 h-4 text-emerald-400" />,
     },
   ];
 
@@ -227,9 +202,9 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({
   const mobileSecondaryTabs: { id: ViewTab; label: string; desc: string; icon: React.ReactNode }[] = [
     {
       id: 'autotrader',
-      label: isRTL ? '🤖 بوت التداول الآلي' : '🤖 AI Auto Trader',
-      desc: isRTL ? 'نظام تداول آلي حقيقي متكامل' : 'Autonomous Trading Engine',
-      icon: <Bot className="w-5 h-5 text-emerald-400" />,
+      label: isRTL ? 'التداول الآلي الخوارزمي' : 'Algorithmic Auto Trader',
+      desc: isRTL ? 'نظام تداول آلي حقيقي متكامل' : 'Quantitative Trading Engine',
+      icon: <Zap className="w-5 h-5 text-emerald-400" />,
     },
     {
       id: 'indicators',
@@ -257,9 +232,9 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({
     },
     {
       id: 'account',
-      label: t('header.demoAccount', 'Account Context'),
-      desc: 'REAL & DEMO isolation',
-      icon: <User className="w-5 h-5 text-amber-400" />,
+      label: t('header.realAccount', 'Real Account'),
+      desc: 'REAL LIVE Session',
+      icon: <User className="w-5 h-5 text-emerald-400" />,
     },
     {
       id: 'diagnostics',
@@ -272,24 +247,6 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({
       label: t('header.sessionSettings', 'Platform Settings'),
       desc: 'SSD & thresholds',
       icon: <Settings className="w-5 h-5 text-slate-200" />,
-    },
-    {
-      id: 'ai_analysis',
-      label: t('nav.ai', 'SMC Smart Analysis'),
-      desc: 'Liquidity & Fair Value Gaps',
-      icon: <Brain className="w-5 h-5 text-amber-400" />,
-    },
-    {
-      id: 'vision',
-      label: t('nav.vision', 'Computer Vision'),
-      desc: 'Autonomous chart pattern vision',
-      icon: <Eye className="w-5 h-5 text-sky-400" />,
-    },
-    {
-      id: 'scanner',
-      label: t('nav.scanner', 'Market Scanner'),
-      desc: 'Multi-Asset Opportunities Scanner',
-      icon: <BarChart2 className="w-5 h-5 text-emerald-400" />,
     },
   ];
 
@@ -363,43 +320,6 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({
                       </div>
                     </div>
                     {item.badge}
-                  </div>
-                )}
-              </button>
-            );
-          })}
-
-          {!collapsed && (
-            <div className="pt-3 pb-1 px-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              Advanced Modules
-            </div>
-          )}
-
-          {advancedTools.map((item) => {
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                id={`side-nav-${item.id}`}
-                onClick={() => onSelectTab(item.id)}
-                title={collapsed ? `${item.label} (${item.sublabel})` : undefined}
-                className={`w-full flex items-center gap-3 px-2.5 py-1.5 rounded-lg text-left transition-all ${
-                  isActive
-                    ? 'bg-sky-500 text-slate-950 font-bold'
-                    : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900/80'
-                }`}
-              >
-                <div className="shrink-0">{item.icon}</div>
-                {!collapsed && (
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs truncate font-medium">{item.label}</div>
-                    <div
-                      className={`text-[10px] truncate ${
-                        isActive ? 'text-slate-900/80' : 'text-slate-500'
-                      }`}
-                    >
-                      {item.sublabel}
-                    </div>
                   </div>
                 )}
               </button>

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Bot,
   Play,
   Square,
   ShieldAlert,
@@ -19,13 +18,10 @@ import {
   ArrowDown,
   Sliders,
   Cpu,
-  Layers,
-  Sparkles,
   RefreshCw,
   BarChart3,
   Wifi,
   WifiOff,
-  Flame,
   Radio,
   FileText,
   Save,
@@ -136,19 +132,19 @@ interface BacktestReport {
 const STRATEGIES_LIST = [
   {
     id: 'sbaa',
-    nameAr: 'SBAA – استراتيجية سبع الذكية المطورة (المحرك الشامل المدمج)',
-    nameEn: 'SBAA Smart Strategy Pro Engine',
+    nameAr: 'SBAA – استراتيجية سبع الخوارزمية المطورة (المحرك الشامل المدمج)',
+    nameEn: 'SBAA Quant Pro Engine',
     descAr: 'دمج شامل لجميع محاور واستراتيجيات سبع الـ 6: نماذج الشموع اليابانية المركبة، سحب السيولة (Sweeps)، كسر الهيكل (BOS/CHOCH)، انضغاط وانفجار بولينجر، ارتداد المتوسطات EMA 20/50/200، وانفراجات RSI. دخول مشروط بمصفوفة 100 نقطة (80+ للتأهيل) بدون أي دخول عشوائي.',
     descEn: 'Full synthesis of all SBAA strategy modules: Pin Bar, Engulfing, Stars, Harami, Liquidity Sweeps, Structure BOS/CHOCH, and 100-point scoring',
     tag: 'SBAA PRO',
   },
   {
     id: 'auto',
-    nameAr: 'الانتقاء الذكي التلقائي لأفضل استراتيجية (Auto-Select Engine)',
-    nameEn: 'Intelligent Auto-Select Strategy',
+    nameAr: 'الانتقاء الكمي التلقائي لأفضل استراتيجية (Auto-Select Engine)',
+    nameEn: 'Quant Auto-Select Strategy',
     descAr: 'محرك يختار تلقائياً وبشكل ديناميكي أقوى استراتيجية مؤهلة للسوق الحالي بدون تعارض اتجاهي',
     descEn: 'Dynamically selects the highest probability qualified strategy fitting the current market regime',
-    tag: 'AI Auto',
+    tag: 'Quant Auto',
   },
   {
     id: 'confluence',
@@ -382,14 +378,13 @@ interface AutoTraderViewProps {
   currentAsset: string;
   currentTimeframe: number;
   accountBalance: number | null;
-  isDemoAccount: boolean;
+  isDemoAccount?: boolean;
 }
 
 export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
   currentAsset,
   currentTimeframe,
   accountBalance,
-  isDemoAccount,
 }) => {
   const { isRTL } = useLanguage();
 
@@ -407,7 +402,7 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
   const [takeProfit, setTakeProfit] = useState<number>(40);
   const [enableMartingale, setEnableMartingale] = useState<boolean>(false);
   const [martingaleMultiplier, setMartingaleMultiplier] = useState<number>(2.0);
-  const [useDemo, setUseDemo] = useState<boolean>(isDemoAccount);
+  const useDemo = false;
 
   // Test Connection Modal
   const [showConnModal, setShowConnModal] = useState<boolean>(false);
@@ -420,13 +415,15 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
   const [backtestLoading, setBacktestLoading] = useState<boolean>(false);
   const [backtestReport, setBacktestReport] = useState<BacktestReport | null>(null);
 
-  // Detailed Trade Inspection Modal (Problem 4)
+  // Detailed Trade Inspection Modal
   const [selectedTradeDetail, setSelectedTradeDetail] = useState<DetailedTradeRecord | null>(null);
 
   const showToast = (type: 'success' | 'error' | 'info', text: string) => {
     setToastMsg({ type, text });
     setTimeout(() => setToastMsg(null), 5000);
   };
+
+  const hasInitializedFromServer = useRef<boolean>(false);
 
   const fetchStatus = async () => {
     try {
@@ -436,13 +433,24 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
         if (data && data.success) {
           setStatus(data);
           if (data.config) {
-            setSelectedStrategy((prev) => prev || data.config.strategyId || 'sbaa');
-            if (data.config.timeframe) {
-              setBotTimeframe((prev) => prev || data.config.timeframe);
+            if (!hasInitializedFromServer.current) {
+              hasInitializedFromServer.current = true;
+              if (data.config.strategyId) {
+                setSelectedStrategy(data.config.strategyId === 'sbaa_ai' ? 'sbaa' : data.config.strategyId);
+              }
+              if (data.config.timeframe) {
+                setBotTimeframe(data.config.timeframe);
+              }
+              if (data.config.baseAmount) {
+                setBaseAmount(data.config.baseAmount);
+              }
+              if (data.config.stopLoss) {
+                setStopLoss(data.config.stopLoss);
+              }
+              if (data.config.takeProfit) {
+                setTakeProfit(data.config.takeProfit);
+              }
             }
-            setBaseAmount((prev) => prev || data.config.baseAmount || 5);
-            setStopLoss((prev) => prev || data.config.stopLoss || 20);
-            setTakeProfit((prev) => prev || data.config.takeProfit || 40);
             if (data.config.enableMartingale !== undefined) {
               setEnableMartingale(data.config.enableMartingale);
             }
@@ -516,27 +524,31 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
   const handleStart = async () => {
     setActionLoading(true);
     try {
+      const payload: Record<string, any> = {
+        strategyId: selectedStrategy,
+        baseAmount,
+        maxAmount: 1000.0,
+        stopLoss,
+        takeProfit,
+        asset: currentAsset,
+        timeframe: botTimeframe || currentTimeframe || 60,
+        isDemo: false,
+        enableMartingale,
+        martingaleMultiplier,
+      };
+
       const res = await fetch('/api/autotrader/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          strategyId: selectedStrategy,
-          baseAmount,
-          maxAmount: 1000.0,
-          stopLoss,
-          takeProfit,
-          asset: currentAsset,
-          timeframe: botTimeframe || currentTimeframe || 60,
-          isDemo: useDemo,
-          enableMartingale,
-          martingaleMultiplier,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!data.success) {
         showToast('error', data.message || (isRTL ? 'فشل تشغيل البوت' : 'Failed to start bot'));
       } else {
-        if (data.status) setStatus(data.status);
+        if (data.status) {
+          setStatus(data.status);
+        }
         showToast('success', isRTL ? 'تم بدء تشغيل البوت الآلي بنجاح!' : 'Auto-trader started successfully!');
       }
     } catch (err: any) {
@@ -566,7 +578,7 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
       const res = await fetch('/api/autotrader/emergency-stop', { method: 'POST' });
       const data = await res.json();
       if (data.status) setStatus(data.status);
-      showToast('error', isRTL ? '🚨 تم تفعيل الإيقاف الطارئ! حظر كافة الأوامر فوراً.' : '🚨 Emergency stop triggered! Orders halted.');
+      showToast('error', isRTL ? 'تم تفعيل الإيقاف الطارئ! حظر كافة الأوامر فوراً.' : 'Emergency stop triggered! Orders halted.');
     } catch (err: any) {
       showToast('error', err?.message || 'Emergency stop error');
     } finally {
@@ -616,7 +628,7 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
           takeProfit,
           asset: currentAsset,
           timeframe: botTimeframe || currentTimeframe || 60,
-          isDemo: useDemo,
+          isDemo: false,
           enableMartingale,
           martingaleMultiplier,
         }),
@@ -694,19 +706,19 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
                   : 'bg-indigo-500/20 border-indigo-500/40 text-indigo-400'
               }`}
             >
-              <Bot className="w-8 h-8" />
+              <Cpu className="w-8 h-8" />
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-xl sm:text-2xl font-black text-white tracking-wide">
-                  {isRTL ? '🤖 بوت التداول الآلي (AI Auto Trading Bot)' : '🤖 AI Auto Trading Bot'}
+                  {isRTL ? 'بوت التداول الآلي الخوارزمي (Quant Auto-Trader)' : 'Quantitative Auto-Trader'}
                 </h2>
-                <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold">
-                  v2.5 PRO
+                <span className="text-[10px] font-mono px-2.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold">
+                  REAL QUANT PRO
                 </span>
                 {isEmergency && (
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-rose-500/30 text-rose-300 border border-rose-500/60 font-bold animate-pulse">
-                    🚨 EMERGENCY STOP
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-500/30 text-rose-300 border border-rose-500/60 font-bold animate-pulse">
+                    EMERGENCY STOP
                   </span>
                 )}
               </div>
@@ -836,19 +848,13 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
               <span>{brokerConnected ? (isRTL ? 'الوسيط متصل' : 'Broker Connected') : (isRTL ? 'الوسيط غير متصل' : 'Broker Offline')}</span>
             </span>
 
-            {/* Account Mode */}
-            <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
-                useDemo
-                  ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
-                  : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-              }`}
-            >
-              {useDemo ? '🔵 DEMO' : '🟢 REAL'}
+            {/* Account Mode (Real Live Only) */}
+            <span className="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold border bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
+              REAL LIVE
             </span>
           </div>
 
-          <div className="flex items-center gap-3 text-[11px] text-slate-400 font-mono">
+          <div className="flex items-center gap-3 text-[11px] text-slate-400 font-mono tabular-nums">
             <span>{isRTL ? 'الزوج:' : 'Asset:'} <strong className="text-slate-200">{currentAsset}</strong></span>
             <span>•</span>
             <span>
@@ -884,12 +890,12 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
       )}
 
       {/* Sub-Navigation Tabs */}
-      <div className="flex border-b border-slate-800 text-xs font-bold">
+      <div className="flex flex-wrap border-b border-slate-800 text-xs font-bold gap-1 sm:gap-0">
         <button
           onClick={() => setActiveTab('dashboard')}
           className={`flex items-center gap-1.5 px-4 py-2.5 border-b-2 transition-colors cursor-pointer ${
             activeTab === 'dashboard'
-              ? 'border-indigo-500 text-white bg-indigo-500/10'
+              ? 'border-emerald-500 text-white bg-emerald-500/10'
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -901,7 +907,7 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
           onClick={() => setActiveTab('lab')}
           className={`flex items-center gap-1.5 px-4 py-2.5 border-b-2 transition-colors cursor-pointer ${
             activeTab === 'lab'
-              ? 'border-indigo-500 text-white bg-indigo-500/10'
+              ? 'border-emerald-500 text-white bg-emerald-500/10'
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -913,12 +919,12 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
           onClick={() => setActiveTab('logs')}
           className={`flex items-center gap-1.5 px-4 py-2.5 border-b-2 transition-colors cursor-pointer ${
             activeTab === 'logs'
-              ? 'border-indigo-500 text-white bg-indigo-500/10'
+              ? 'border-emerald-500 text-white bg-emerald-500/10'
               : 'border-transparent text-slate-400 hover:text-slate-200'
           }`}
         >
           <FileText className="w-4 h-4" />
-          <span>{isRTL ? 'سجل العمليات والتدقيق' : 'Audit Logs & Evasion'}</span>
+          <span>{isRTL ? 'سجل العمليات والتدقيق' : 'Audit Logs'}</span>
         </button>
       </div>
 
@@ -1207,28 +1213,19 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
                 )}
               </div>
 
-              {/* Account Mode Toggle */}
+              {/* Account Mode (Real Live Locked) */}
               <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
                 <div>
                   <span className="text-xs font-semibold text-slate-300 block">
                     {isRTL ? 'وضع الحساب المستهدف' : 'Target Account Mode'}
                   </span>
-                  <span className="text-[10px] text-slate-500">
-                    {useDemo ? (isRTL ? 'وضع تجريبي آمن' : 'Safe Demo Account') : (isRTL ? 'أموال حقيقية' : 'Live Real Account')}
+                  <span className="text-[10px] text-emerald-400">
+                    {isRTL ? 'حساب حقيقي فقط (تنفيذ فعلي 100%)' : 'Real Live Account Only (100% Real Execution)'}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  disabled={isRunning}
-                  onClick={() => setUseDemo(!useDemo)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-mono font-black border transition-all cursor-pointer ${
-                    useDemo
-                      ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
-                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                  }`}
-                >
-                  {useDemo ? 'DEMO MODE' : 'REAL LIVE'}
-                </button>
+                <span className="px-3 py-1.5 rounded-xl text-xs font-mono font-black border bg-emerald-500/15 text-emerald-300 border-emerald-500/40">
+                  REAL LIVE
+                </span>
               </div>
 
               {/* Stop-Loss Disclosure Note */}
@@ -1318,27 +1315,28 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
                         <tr
                           key={trade.id}
                           onClick={() => {
+                            const effectiveDuration = (trade as any).durationSeconds || status?.config?.timeframe || botTimeframe || currentTimeframe || 60;
                             setSelectedTradeDetail({
                               id: trade.id,
                               ticketId: trade.ticketId || trade.id,
                               asset: trade.asset,
                               accountMode: useDemo ? 'DEMO' : 'REAL',
-                              timeframe: currentTimeframe || 60,
+                              timeframe: effectiveDuration,
                               strategyName: trade.strategy || 'توافق الاستراتيجيات (Confluence Matrix)',
                               action: trade.action,
                               amount: trade.amount,
                               openTime: Math.floor(trade.timestamp / 1000),
-                              closeTime: Math.floor(trade.timestamp / 1000) + (currentTimeframe || 60),
+                              closeTime: Math.floor(trade.timestamp / 1000) + effectiveDuration,
                               openPrice: trade.openPrice || 0,
                               entryPrice: trade.openPrice || 0,
                               closePrice: trade.closePrice || trade.openPrice || 0,
                               exitPrice: trade.closePrice || trade.openPrice || 0,
                               profit: trade.profit,
                               result: trade.status === 'WON' ? 'WIN' : trade.status === 'LOST' ? 'LOSS' : trade.status === 'DRAW' ? 'DRAW' : 'PENDING',
-                              durationSec: currentTimeframe || 60,
+                              durationSec: effectiveDuration,
                               reasons: [
                                 `إشارة مؤكدة من استراتيجية ${trade.strategy || 'توافق الاستراتيجيات'}`,
-                                `فريم التنفيذ: ${currentTimeframe || 60} ثانية`,
+                                `فريم التنفيذ: ${effectiveDuration} ثانية`,
                                 trade.action === 'call' ? 'توافق مؤشرات الزخم والاتجاه للصعود' : 'توافق مؤشرات الزخم والاتجاه للهبوط',
                               ],
                               confluenceScore: 88,
@@ -1446,8 +1444,8 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
               </h3>
               <p className="text-xs text-slate-400 mt-1">
                 {isRTL
-                  ? 'اختبار الاستراتيجيات الـ 6 المعتمدة خطوة بخطوة عبر الشموع التاريخية دون أي تحيز زمني مستقبلي'
-                  : 'Zero look-ahead bias backtesting across verified chronological candles.'}
+                  ? 'اختبار الاستراتيجيات الـ 26 الخوارزمية والمحركات المدمجة خطوة بخطوة عبر الشموع التاريخية دون أي تحيز زمني مستقبلي'
+                  : 'Zero look-ahead bias backtesting across all 26 quantitative strategies and composite engines.'}
               </p>
             </div>
 
@@ -1696,7 +1694,7 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">{isRTL ? 'نوع الحساب:' : 'Account Mode:'}</span>
-                    <span className="text-amber-400">{connTestResult.mode || (connTestResult.isDemo ? 'DEMO' : 'REAL')}</span>
+                    <span className="text-emerald-400 font-bold">REAL</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">{isRTL ? 'الرصيد المتاح:' : 'Balance:'}</span>

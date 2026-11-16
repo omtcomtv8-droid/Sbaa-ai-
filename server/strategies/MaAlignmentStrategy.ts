@@ -1,5 +1,5 @@
-import { Candle, StrategyResult } from '../types';
-import { calculateEMA, calculateSMA } from '../indicators';
+import { Candle, StrategyResult, StrategyCondition } from '../types';
+import { calculateEMA } from '../indicators';
 
 export interface MaAlignmentConfig {
   enabled: boolean;
@@ -78,23 +78,26 @@ export class MaAlignmentStrategy {
     const c2Bull = ema9 > ema21;
     const c3Bull = ema21 > ema50;
 
-    const conditions = [
-      { name: `Price (${currPrice.toFixed(4)}) > EMA 9 (${ema9.toFixed(4)})`, satisfied: c1Bull, weight: 30 },
-      { name: `EMA 9 > EMA 21 (${ema21.toFixed(4)})`, satisfied: c2Bull, weight: 35 },
-      { name: `EMA 21 > EMA 50 (${ema50.toFixed(4)})`, satisfied: c3Bull, weight: 35 },
+    const c1Bear = currPrice < ema9;
+    const c2Bear = ema9 < ema21;
+    const c3Bear = ema21 < ema50;
+
+    const bullishConditions: StrategyCondition[] = [
+      { id: 'ma_bull_fast', name: `EMA 9 (${ema9.toFixed(5)}) > EMA 21 (${ema21.toFixed(5)})`, satisfied: c2Bull, weight: 35, isMandatory: true },
+      { id: 'ma_bull_slow', name: `EMA 21 (${ema21.toFixed(5)}) > EMA 50 (${ema50.toFixed(5)})`, satisfied: c3Bull, weight: 35, isMandatory: true },
+      { id: 'ma_bull_price', name: `Price (${currPrice.toFixed(5)}) > EMA 9 (${ema9.toFixed(5)})`, satisfied: c1Bull, weight: 30 },
     ];
 
-    let bullishScore = 0;
-    if (c1Bull) bullishScore += 30;
-    if (c2Bull) bullishScore += 35;
-    if (c3Bull) bullishScore += 35;
+    const bearishConditions: StrategyCondition[] = [
+      { id: 'ma_bear_fast', name: `EMA 9 (${ema9.toFixed(5)}) < EMA 21 (${ema21.toFixed(5)})`, satisfied: c2Bear, weight: 35, isMandatory: true },
+      { id: 'ma_bear_slow', name: `EMA 21 (${ema21.toFixed(5)}) < EMA 50 (${ema50.toFixed(5)})`, satisfied: c3Bear, weight: 35, isMandatory: true },
+      { id: 'ma_bear_price', name: `Price (${currPrice.toFixed(5)}) < EMA 9 (${ema9.toFixed(5)})`, satisfied: c1Bear, weight: 30 },
+    ];
 
-    let bearishScore = 0;
-    if (!c1Bull) bearishScore += 30;
-    if (!c2Bull) bearishScore += 35;
-    if (!c3Bull) bearishScore += 35;
+    const bullishScore = bullishConditions.reduce((acc, c) => acc + (c.satisfied ? c.weight : 0), 0);
+    const bearishScore = bearishConditions.reduce((acc, c) => acc + (c.satisfied ? c.weight : 0), 0);
 
-    if (bullishScore >= 70) {
+    if (c2Bull && c3Bull && bullishScore >= 70) {
       return {
         strategyId: 'ma_alignment',
         strategyName: 'MA Alignment Trend',
@@ -102,7 +105,7 @@ export class MaAlignmentStrategy {
         score: (bullishScore / 100) * config.weight * 2,
         weight: config.weight,
         reasons: [
-          `Strong Bullish Stack: Price > EMA9 > EMA21 > EMA50`,
+          `Strong Bullish Stack: Price ${c1Bull ? '>' : '~'} EMA9 > EMA21 > EMA50`,
           `EMA9: ${ema9.toFixed(5)}, EMA21: ${ema21.toFixed(5)}, EMA50: ${ema50.toFixed(5)}`,
         ],
         candleTimestamp,
@@ -111,11 +114,11 @@ export class MaAlignmentStrategy {
         bearishScore,
         percentage: bullishScore,
         direction: 'BULLISH',
-        conditions,
+        conditions: bullishConditions,
       };
     }
 
-    if (bearishScore >= 70) {
+    if (c2Bear && c3Bear && bearishScore >= 70) {
       return {
         strategyId: 'ma_alignment',
         strategyName: 'MA Alignment Trend',
@@ -123,7 +126,7 @@ export class MaAlignmentStrategy {
         score: -(bearishScore / 100) * config.weight * 2,
         weight: config.weight,
         reasons: [
-          `Strong Bearish Stack: Price < EMA9 < EMA21 < EMA50`,
+          `Strong Bearish Stack: Price ${c1Bear ? '<' : '~'} EMA9 < EMA21 < EMA50`,
           `EMA9: ${ema9.toFixed(5)}, EMA21: ${ema21.toFixed(5)}, EMA50: ${ema50.toFixed(5)}`,
         ],
         candleTimestamp,
@@ -132,7 +135,7 @@ export class MaAlignmentStrategy {
         bearishScore,
         percentage: bearishScore,
         direction: 'BEARISH',
-        conditions,
+        conditions: bearishConditions,
       };
     }
 
@@ -149,7 +152,7 @@ export class MaAlignmentStrategy {
       bearishScore,
       percentage: Math.max(bullishScore, bearishScore),
       direction: 'NEUTRAL',
-      conditions,
+      conditions: bullishScore >= bearishScore ? bullishConditions : bearishConditions,
     };
   }
 }

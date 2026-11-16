@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { ShieldAlert, Key, Sparkles, TrendingUp, CheckCircle2, Lock, ArrowRight, ArrowLeft } from 'lucide-react';
+import { ShieldAlert, Key, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useLanguage } from '../i18n/LanguageContext';
+import { BrandLogo } from './BrandLogo';
 
 interface ActivationScreenProps {
   onOpenAdminLogin?: () => void;
@@ -12,7 +13,7 @@ export const ActivationScreen: React.FC<ActivationScreenProps> = ({
   onOpenAdminLogin,
   onOpenKeyRoom,
 }) => {
-  const { activateCode, isActivating, errorMessage, enterDemoGuest } = useAuth();
+  const { activateCode, isActivating, errorMessage } = useAuth();
   const { isRTL } = useLanguage();
   const [code, setCode] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
@@ -33,27 +34,25 @@ export const ActivationScreen: React.FC<ActivationScreenProps> = ({
       dir={isRTL ? 'rtl' : 'ltr'}
     >
       {/* Background ambient lighting */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-amber-500/10 rounded-full blur-[140px] pointer-events-none" />
-      <div className="absolute bottom-10 left-10 w-80 h-80 bg-blue-600/10 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[150px] pointer-events-none" />
+      <div className="absolute bottom-10 left-10 w-80 h-80 bg-amber-500/10 rounded-full blur-[120px] pointer-events-none" />
 
-      <div className="relative w-full max-w-md bg-slate-900/90 border border-slate-800 backdrop-blur-2xl rounded-3xl shadow-2xl p-6 sm:p-8 text-center space-y-6">
-        {/* Brand Icon */}
+      <div className="relative w-full max-w-md bg-slate-900/95 border border-emerald-500/20 backdrop-blur-2xl rounded-3xl shadow-2xl p-6 sm:p-8 text-center space-y-6">
+        {/* Redesigned Brand Icon */}
         <div className="flex justify-center">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 p-0.5 shadow-xl shadow-amber-500/20">
-            <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center text-amber-400">
-              <TrendingUp className="w-8 h-8" />
-            </div>
+          <div className="p-1.5 rounded-3xl bg-gradient-to-br from-emerald-500/20 via-slate-800/40 to-amber-500/20 border border-emerald-500/25 shadow-xl shadow-emerald-950/30">
+            <BrandLogo size="xl" />
           </div>
         </div>
 
         {/* Title */}
         <div className="space-y-2">
           <h1 className="text-xl sm:text-2xl font-black text-slate-100 tracking-tight">
-            SABAA AI SOLUTION
+            SABAA QUANT
           </h1>
           <p className="text-xs text-slate-400 leading-relaxed">
             {isRTL
-              ? 'تفعيل ترخيص المنصة المؤسسية للدخول إلى غرفة التداول الحية'
+              ? 'تفعيل ترخيص المنصة المؤسسية للدخول إلى بوابة الحساب الحقيقي'
               : 'Institutional Platform License Activation Required'}
           </p>
         </div>
@@ -64,7 +63,7 @@ export const ActivationScreen: React.FC<ActivationScreenProps> = ({
           <p className="leading-snug">
             {isRTL
               ? 'يرجى إدخال كود التفعيل المخصص أو كود الماستر (sbaa0000) للوصول الفوري للمنصة.'
-              : 'Please enter your license key or master code (sbaa0000) to access live trading signals.'}
+              : 'Please enter your license key or master code (sbaa0000) to access live trading.'}
           </p>
         </div>
 
@@ -84,13 +83,13 @@ export const ActivationScreen: React.FC<ActivationScreenProps> = ({
               setLocalError(null);
             }}
             placeholder="SABAA-XXXX-XXXX or sbaa0000"
-            className="w-full py-3 px-4 bg-slate-950 border border-slate-700 rounded-2xl text-slate-100 placeholder-slate-500 font-mono text-sm tracking-widest text-center focus:outline-none focus:border-amber-400"
+            className="w-full py-3 px-4 bg-slate-950 border border-slate-700 rounded-2xl text-slate-100 placeholder-slate-500 font-mono text-sm tracking-widest text-center focus:outline-none focus:border-emerald-400"
           />
 
           <button
             type="submit"
             disabled={isActivating || !code.trim()}
-            className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs sm:text-sm shadow-xl shadow-amber-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-amber-500 hover:from-emerald-400 hover:to-amber-400 text-slate-950 font-black text-xs sm:text-sm shadow-xl shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
           >
             {isActivating ? (
               <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
@@ -100,16 +99,6 @@ export const ActivationScreen: React.FC<ActivationScreenProps> = ({
             <span>{isRTL ? 'تفعيل ودخول المنصة' : 'Activate & Enter Platform'}</span>
           </button>
         </form>
-
-        {/* Instant Demo Access Button */}
-        <button
-          type="button"
-          onClick={() => enterDemoGuest()}
-          className="w-full py-3 px-4 rounded-2xl bg-slate-950/80 hover:bg-slate-800/80 border border-slate-800 text-slate-300 hover:text-amber-400 font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
-        >
-          <Sparkles className="w-4 h-4 text-amber-400" />
-          <span>{isRTL ? 'دخول تجريبي فوري (Instant Demo)' : 'Instant Demo Access'}</span>
-        </button>
 
         {/* Footer Admin Links */}
         <div className="pt-2 border-t border-slate-800/80 flex items-center justify-center gap-4 text-xs">

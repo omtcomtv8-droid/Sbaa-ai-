@@ -4,7 +4,6 @@ import { NavigationTabs } from './components/NavigationTabs';
 import { AssetSelector } from './components/AssetSelector';
 import { CandlestickChart } from './components/CandlestickChart';
 import { SignalPanel } from './components/SignalPanel';
-import { TechnicalGauges } from './components/TechnicalGauges';
 import { SignalHistoryTable } from './components/SignalHistoryTable';
 import { DiagnosticsPanel } from './components/DiagnosticsPanel';
 import { SettingsModal } from './components/SettingsModal';
@@ -14,7 +13,6 @@ import { MobileInstallBanner } from './components/MobileInstallBanner';
 import { appUpdateService, AppVersionInfo } from './services/AppUpdateService';
 import { useAndroidLifecycle } from './hooks/useAndroidLifecycle';
 import { MarketRegimeCard } from './components/MarketRegimeCard';
-import { MarketDirectionPanel } from './components/MarketDirectionPanel';
 import { StrategyScoreTable } from './components/StrategyScoreTable';
 import { PerformancePanel } from './components/PerformancePanel';
 import { StrategiesConfigPanel } from './components/StrategiesConfigPanel';
@@ -22,9 +20,6 @@ import { StrategiesView } from './components/StrategiesView';
 import { MarketBrowser } from './components/MarketBrowser';
 import { SignalDetailModal } from './components/SignalDetailModal';
 import { LandingPage } from './components/LandingPage';
-import { VisionAnalysisView } from './components/VisionAnalysisView';
-import { AIAnalysisView } from './components/AIAnalysisView';
-import { AiApiKeySection } from './components/AiApiKeySection';
 import { RiskManagementView } from './components/RiskManagementView';
 import { MarketScannerView } from './components/MarketScannerView';
 import { AdminPanel } from './components/AdminPanel';
@@ -142,7 +137,7 @@ export default function App() {
   });
 
   const authInfo = useAuth();
-  const { authState, activation, user: authUser, firebaseUser: authFirebaseUser, enterDemoGuest } = authInfo;
+  const { authState, activation, user: authUser } = authInfo;
 
   // Administrator State
   const [adminToken, setAdminToken] = useState<string | null>(() => {
@@ -173,7 +168,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [configuredSession, setConfiguredSession] = useState<string>(() => pocketOptionSessionStore.getState().cachedSessionToken || '');
-  const [configuredIsDemo, setConfiguredIsDemo] = useState<boolean>(true);
+  const [configuredIsDemo, setConfiguredIsDemo] = useState<boolean>(false);
   const [configuredUid, setConfiguredUid] = useState<string | number | null>(null);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const firebaseUserRef = useRef<FirebaseUser | null>(firebaseUser);
@@ -625,11 +620,7 @@ export default function App() {
         const data = JSON.parse(e.data);
         if (data && data.balance !== null && data.balance !== undefined) {
           const bal = Number(data.balance);
-          const currentMode =
-            data.accountMode ||
-            pocketOptionSessionStore.getState().accountMode ||
-            (diagnostics?.account?.isDemo ? 'DEMO' : 'REAL') ||
-            'DEMO';
+          const currentMode = 'REAL';
 
           pocketOptionSessionStore.setVerifiedBalance({
             generation: data.generation || pocketOptionSessionStore.getState().generation,
@@ -665,7 +656,7 @@ export default function App() {
                 },
                 account: {
                   balance: bal,
-                  isDemo: currentMode === 'DEMO',
+                  isDemo: false,
                   currency: data.currency || 'USD',
                   uidMasked: data.accountId || null,
                   uid: null,
@@ -678,7 +669,7 @@ export default function App() {
               account: {
                 ...prev.account,
                 balance: bal,
-                isDemo: currentMode === 'DEMO',
+                isDemo: false,
                 uidMasked: data.accountId || prev.account?.uidMasked,
                 currency: data.currency || prev.account?.currency || 'USD',
               },
@@ -1072,18 +1063,11 @@ export default function App() {
       <div className="min-h-screen bg-slate-950 text-slate-100 font-sans">
         <LandingPage
           onEnterTerminal={() => {
-            if (authState === 'UNAUTHENTICATED') {
-              enterDemoGuest();
-            }
             setActiveTab('dashboard');
           }}
           onLaunchTerminal={() => {
-            if (authState === 'UNAUTHENTICATED') {
-              enterDemoGuest();
-            }
             setActiveTab('dashboard');
           }}
-          onOpenVision={() => setActiveTab('vision')}
           onOpenScanner={() => setActiveTab('scanner')}
           onOpenSettings={() => setIsSettingsOpen(true)}
           firebaseUser={firebaseUser}
@@ -1337,39 +1321,12 @@ export default function App() {
                     </h4>
                     <p className="text-xs text-rose-300/80 mt-0.5 leading-relaxed">
                       {isRTL
-                        ? 'أعادت بوابة Pocket Option رفض جلسة الاتصال (NotAuthorized). يرجى تحديث رمز الجلسة / SSD أو التبديل الفوري للحساب التجريبي لمتابعة الرسوم البيانية والإشارات الحية فوراً.'
-                        : 'The Pocket Option gateway returned an authentication rejection (NotAuthorized). Your session token has expired or is invalid. You can update your session token or switch to Demo mode now to continue real-time charts and signals.'}
+                        ? 'أعادت بوابة Pocket Option رفض جلسة الاتصال (NotAuthorized). يرجى تحديث رمز الجلسة / SSD الخاص بالحساب الحقيقي لمتابعة الرسوم البيانية والإشارات الحية.'
+                        : 'The Pocket Option gateway returned an authentication rejection (NotAuthorized). Please update your Real Account SSD / session token to continue.'}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
-                  <button
-                    id="btn-switch-demo-banner"
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        setIsReconnecting(true);
-                        await fetch('/api/account/switch-mode', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ mode: 'DEMO' }),
-                        });
-                        setConfiguredIsDemo(true);
-                        setTimeout(() => {
-                          fetchStatus();
-                          fetchAssets();
-                          fetchCandles(selectedAsset, selectedTimeframe);
-                          setIsReconnecting(false);
-                        }, 800);
-                      } catch (err) {
-                        setIsReconnecting(false);
-                      }
-                    }}
-                    className="px-3.5 py-2 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>{isRTL ? 'التبديل للتجريبي الفوري' : 'Switch to Demo'}</span>
-                  </button>
                   <button
                     id="btn-update-token-banner"
                     type="button"
@@ -1388,7 +1345,7 @@ export default function App() {
           <main className="flex-1 max-w-7xl 2xl:max-w-[1700px] w-full mx-auto p-2.5 sm:p-4 lg:p-6 space-y-4 sm:space-y-6 pb-[calc(5.5rem+var(--sab))] md:pb-8">
 
         {/* VIEW 1: MAIN DASHBOARD */}
-        {(activeTab === 'dashboard' || activeTab === 'terminal' || activeTab === 'portfolio' || !['market', 'chart', 'indicators', 'strategies', 'signals', 'history', 'performance', 'connection', 'account', 'diagnostics', 'settings', 'vision', 'ai_analysis', 'scanner', 'risk', 'admin'].includes(activeTab)) && (
+        {(activeTab === 'dashboard' || activeTab === 'terminal' || activeTab === 'portfolio' || !['market', 'chart', 'indicators', 'strategies', 'signals', 'history', 'performance', 'connection', 'account', 'diagnostics', 'settings', 'scanner', 'risk', 'admin', 'autotrader', 'sbaa'].includes(activeTab)) && (
           <div className="space-y-4 sm:space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
               {/* Left Column (7-8 cols): Candlestick Chart + Signal Callout */}
@@ -1426,45 +1383,9 @@ export default function App() {
                 />
               </div>
 
-              {/* Right Column (4-5 cols): Authoritative Market Direction, Regime, Technical Gauges, Strategy Scores */}
+              {/* Right Column (4-5 cols): Market Regime & Strategy Scores */}
               <div className="lg:col-span-5 xl:col-span-4 space-y-4 sm:space-y-6">
-                <MarketDirectionPanel
-                  marketDirection={
-                    (activeSignal as any)?.marketDirection ??
-                    (activeSignal?.type === 'UP' ? 'BULLISH' : activeSignal?.type === 'DOWN' ? 'BEARISH' : 'WAIT')
-                  }
-                  trendValue={activeSignal?.indicators?.adx?.trendStrength ?? (activeSignal?.type === 'UP' ? 'BULLISH' : activeSignal?.type === 'DOWN' ? 'BEARISH' : 'WAIT')}
-                  momentumValue={
-                    activeSignal?.indicators?.rsi != null && typeof activeSignal.indicators.rsi === 'number'
-                      ? activeSignal.indicators.rsi > 55
-                        ? `BULLISH (${activeSignal.indicators.rsi.toFixed(1)})`
-                        : activeSignal.indicators.rsi < 45
-                        ? `BEARISH (${activeSignal.indicators.rsi.toFixed(1)})`
-                        : `NEUTRAL (${activeSignal.indicators.rsi.toFixed(1)})`
-                      : null
-                  }
-                  structureValue={activeSignal?.candle?.pattern || (activeSignal?.type === 'UP' ? 'Higher Highs Sequence' : activeSignal?.type === 'DOWN' ? 'Lower Lows Sequence' : 'Consolidation')}
-                  volatilityValue={activeSignal?.indicators?.volatilityState || 'NORMAL'}
-                  atrValue={typeof activeSignal?.indicators?.atr === 'number' ? activeSignal.indicators.atr : null}
-                  supportLevel={
-                    activeSignal?.srLevels?.find((l) => l.type === 'SUPPORT')?.price ??
-                    (activeSignal?.srLevels as any)?.supports?.[0]?.price ??
-                    null
-                  }
-                  resistanceLevel={
-                    activeSignal?.srLevels?.find((l) => l.type === 'RESISTANCE')?.price ??
-                    (activeSignal?.srLevels as any)?.resistances?.[0]?.price ??
-                    null
-                  }
-                  lastCandle={candles && candles.length > 0 ? candles[candles.length - 1] : null}
-                  dataFreshnessMs={(diagnostics?.freshnessSeconds ?? 0) * 1000}
-                  source={candles && candles.length > 0 && (candles[0] as any).source ? (candles[0] as any).source : (selectedAsset.includes('_otc') ? 'Pocket Option OTC Feed' : 'Pocket Option Real Feed')}
-                  asset={selectedAsset}
-                  timeframe={selectedTimeframe}
-                  digits={selectedAsset.includes('JPY') ? 3 : 5}
-                />
                 <MarketRegimeCard regime={activeSignal?.regime ?? null} />
-                <TechnicalGauges indicators={indicators} candles={candles} />
                 <StrategyScoreTable
                   strategies={activeSignal?.strategies}
                   conflictProtectionActive={activeSignal?.conflictProtectionActive}
@@ -1531,9 +1452,8 @@ export default function App() {
               onClearBacktestOverlay={() => setBacktestOverlayActive(false)}
             />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
               <MarketRegimeCard regime={activeSignal?.regime ?? null} />
-              <TechnicalGauges indicators={indicators} candles={candles} />
             </div>
           </div>
         )}
@@ -1778,9 +1698,7 @@ export default function App() {
                 <div className="flex items-center justify-between p-3 rounded-lg bg-slate-950 border border-slate-800">
                   <span className="text-slate-400">Mode:</span>
                   <span className="font-mono font-bold">
-                    {diagnostics?.account.isDemo ? (
-                      <span className="text-amber-400">DEMO</span>
-                    ) : diagnostics?.authVerified ? (
+                    {diagnostics?.authVerified ? (
                       <span className="text-emerald-400">REAL</span>
                     ) : (
                       <span className="text-slate-400">UNKNOWN</span>
@@ -1793,7 +1711,7 @@ export default function App() {
                   <span className="text-slate-400">Balance:</span>
                   <span className="font-mono font-bold text-base">
                     {diagnostics?.account.balance !== null && diagnostics?.account.balance !== undefined ? (
-                      <span className={diagnostics.account.isDemo ? 'text-amber-400' : 'text-emerald-400'}>
+                      <span className="text-emerald-400">
                         ${diagnostics.account.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     ) : diagnostics?.subsystems.account === 'LOADING' ? (
@@ -1862,46 +1780,6 @@ export default function App() {
               settings={strategySettings}
               onUpdateSettings={handleUpdateConfigSettings}
             />
-            <AiApiKeySection
-              activeAsset={selectedAsset}
-              timeframe={selectedTimeframe}
-              currentPrice={currentPrice}
-              activeSignal={activeSignal}
-              indicators={indicators}
-            />
-          </div>
-        )}
-
-        {/* VIEW 12: VISION ANALYSIS VIEW */}
-        {activeTab === 'vision' && (
-          <VisionAnalysisView
-            currentSymbol={selectedAsset}
-            currentPrice={currentPrice || 0}
-            onApplySetup={(setup) => {
-              if (setup.symbol) handleSelectAsset(setup.symbol);
-              setActiveTab('chart');
-            }}
-          />
-        )}
-
-        {/* VIEW 13: AI ANALYSIS VIEW */}
-        {activeTab === 'ai_analysis' && (
-          <div className="space-y-6">
-            <AiApiKeySection
-              activeAsset={selectedAsset}
-              timeframe={selectedTimeframe}
-              currentPrice={currentPrice}
-              activeSignal={activeSignal}
-              indicators={indicators}
-            />
-            <AIAnalysisView
-              currentSymbol={selectedAsset}
-              currentPrice={currentPrice || 0}
-              onApplySetup={(setup) => {
-                if (setup.symbol) handleSelectAsset(setup.symbol);
-                setActiveTab('chart');
-              }}
-            />
           </div>
         )}
 
@@ -1921,7 +1799,7 @@ export default function App() {
             currentAsset={selectedAsset}
             currentTimeframe={selectedTimeframe}
             accountBalance={diagnostics?.account?.balance ?? null}
-            isDemoAccount={diagnostics?.account?.isDemo ?? true}
+            isDemoAccount={false}
           />
         )}
 
@@ -1931,7 +1809,7 @@ export default function App() {
             currentAsset={selectedAsset}
             currentTimeframe={selectedTimeframe}
             accountBalance={diagnostics?.account?.balance ?? null}
-            isDemoAccount={diagnostics?.account?.isDemo ?? true}
+            isDemoAccount={false}
           />
         )}
 
@@ -1939,7 +1817,7 @@ export default function App() {
         {activeTab === 'risk' && (
           <RiskManagementView
             initialBalance={diagnostics?.account?.balance}
-            isDemo={diagnostics?.account?.isDemo}
+            isDemo={false}
           />
         )}
 
@@ -1956,7 +1834,7 @@ export default function App() {
         currentEndpoint={diagnostics?.endpoint || 'wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket'}
         currentSession={configuredSession}
         currentUid={configuredUid || diagnostics?.account.uid || diagnostics?.authUid}
-        isDemo={configuredIsDemo}
+        isDemo={false}
         strategySettings={strategySettings}
         diagnostics={diagnostics}
         onSave={handleSaveSettings}

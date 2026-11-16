@@ -1,58 +1,69 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
   <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0f172a" />
-      <stop offset="100%" stop-color="#020617" />
+    <radialGradient id="bgGrad" cx="50%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#111C33" />
+      <stop offset="60%" stop-color="#090E1B" />
+      <stop offset="100%" stop-color="#050810" />
+    </radialGradient>
+    <linearGradient id="emeraldGrad" x1="120" y1="390" x2="392" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="55%" stop-color="#10B981" />
+      <stop offset="100%" stop-color="#6EE7B7" />
     </linearGradient>
-    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#fef08a" />
-      <stop offset="40%" stop-color="#f59e0b" />
-      <stop offset="100%" stop-color="#d97706" />
+    <linearGradient id="amberGrad" x1="256" y1="90" x2="400" y2="230" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FDE68A" />
+      <stop offset="50%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#D97706" />
     </linearGradient>
-    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="10" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over" />
-    </filter>
+    <linearGradient id="ringGrad" x1="64" y1="64" x2="448" y2="448" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#10B981" stop-opacity="0.55" />
+      <stop offset="50%" stop-color="#334155" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#F59E0B" stop-opacity="0.55" />
+    </linearGradient>
   </defs>
-  
-  <!-- Rounded Background Card -->
-  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
-  <rect width="504" height="504" x="4" y="4" rx="108" fill="none" stroke="url(#goldGrad)" stroke-width="4" stroke-opacity="0.3" />
-  
-  <!-- Hexagonal Shield -->
-  <polygon points="256,64 424,160 424,352 256,448 88,352 88,160" 
-           fill="#05070b" 
-           stroke="url(#goldGrad)" 
-           stroke-width="14" 
-           stroke-linejoin="round"
-           filter="url(#glow)" />
-           
-  <!-- Inner Shield Glow Ring -->
-  <polygon points="256,84 404,168 404,344 256,428 108,344 108,168" 
-           fill="#090d16" 
-           stroke="#f59e0b" 
-           stroke-width="3" 
-           stroke-opacity="0.4"
-           stroke-linejoin="round" />
 
-  <!-- Bold Stylized S for SABAA -->
-  <path d="M 340 170 
-           C 340 145, 305 130, 256 130 
-           C 200 130, 165 155, 165 195 
-           C 165 240, 205 255, 260 268 
-           L 275 272 
-           C 320 282, 345 300, 345 335 
-           C 345 380, 305 405, 250 405 
-           C 190 405, 155 375, 155 340 
-           L 195 340 
-           C 195 362, 220 375, 252 375 
-           C 285 375, 310 360, 310 335 
-           C 310 295, 270 282, 220 270 
-           L 205 266 
-           C 160 255, 130 235, 130 195 
-           C 130 150, 175 125, 252 125 
-           C 315 125, 350 152, 350 170 
-           Z" 
-        fill="url(#goldGrad)" 
-        filter="url(#glow)" />
+  <!-- Outer Rounded Obsidian App Tile -->
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bgGrad)" />
+  <rect x="24" y="24" width="464" height="464" rx="104" stroke="url(#ringGrad)" stroke-width="4" />
+
+  <!-- Subtle Precision Geometric Grid Ring -->
+  <polygon
+    points="256,64 392,120 448,256 392,392 256,448 120,392 64,256 120,120"
+    stroke="#1E293B"
+    stroke-width="2.5"
+    fill="none"
+  />
+
+  <!-- Left & Right Algorithmic Pillars (Quantitative Candlesticks) -->
+  <rect x="136" y="256" width="32" height="92" rx="10" fill="#1E293B" stroke="#334155" stroke-width="2" />
+  <rect x="148" y="220" width="8" height="36" rx="4" fill="#475569" />
+
+  <rect x="202" y="210" width="32" height="138" rx="10" fill="#064E3B" stroke="#10B981" stroke-opacity="0.6" stroke-width="2" />
+  <rect x="214" y="172" width="8" height="38" rx="4" fill="#10B981" />
+
+  <!-- Precision Ascending Confluence Trajectory -->
+  <path
+    d="M126 324 L218 246 L278 282 L374 164"
+    stroke="url(#emeraldGrad)"
+    stroke-width="24"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Gold Apex Directional Vector Head -->
+  <path
+    d="M320 156 L388 148 L380 216"
+    stroke="url(#amberGrad)"
+    stroke-width="22"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Center Institutional Diamond Anchor -->
+  <polygon
+    points="278,258 302,282 278,306 254,282"
+    fill="#070B14"
+    stroke="#F59E0B"
+    stroke-width="6"
+  />
 </svg>

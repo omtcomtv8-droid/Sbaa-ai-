@@ -249,6 +249,8 @@ export class PocketOptionService {
   }> = new Map();
   private onDealOpenedListeners: ((deal: any) => void)[] = [];
   private onDealClosedListeners: ((deal: any) => void)[] = [];
+  private closedDealIds = new Set<string>();
+  private sessionStartTimestampSec: number = Math.floor(Date.now() / 1000);
 
   // Buffer for early authenticated account packets arriving before store readiness
   private earlyAccountMessageBuffer: Array<{
@@ -357,8 +359,14 @@ export class PocketOptionService {
       this.subsystems.account = 'LOADING';
       this.notifyStatusChange();
     }
+    this.sendPacket(`42["change-account",{"isDemo":${activeMode === 'DEMO' ? 1 : 0}}]`);
+    this.sendPacket(`42["change_account",{"isDemo":${activeMode === 'DEMO' ? 1 : 0}}]`);
     this.sendPacket('42["update_balance"]');
     this.sendPacket('42["updateBalance"]');
+    this.sendPacket('42["user"]');
+    this.sendPacket('42["profile"]');
+    this.sendPacket('42["user/profile"]');
+    this.sendPacket('42["load/user"]');
     this.sendPacket(`42["change_balance",{"isDemo":${activeMode === 'DEMO' ? 1 : 0}}]`);
     this.sendPacket(`42["changeBalance",{"isDemo":${activeMode === 'DEMO' ? 1 : 0}}]`);
     this.sendPacket('42["ps"]');
@@ -532,8 +540,8 @@ export class PocketOptionService {
     if (this.ws) {
       const socket = this.ws;
       this.ws = null;
-      socket.removeAllListeners();
-      socket.on('error', () => {});
+      if (typeof socket.removeAllListeners === 'function') socket.removeAllListeners();
+      if (typeof socket.on === 'function') socket.on('error', () => {});
       try {
         if (socket.readyState === WebSocket.CONNECTING) {
           socket.terminate();
@@ -673,6 +681,7 @@ export class PocketOptionService {
     this.isExplicitlyClosed = false;
     this.authVerified = false;
     this.authError = null;
+    this.sessionStartTimestampSec = Math.floor(Date.now() / 1000);
     this.subsystems.websocket = 'connecting';
     this.subsystems.auth = 'pending';
     this.subsystems.account = 'LOADING';
@@ -1143,13 +1152,20 @@ export class PocketOptionService {
           const jsonStr = str.slice(jsonStart);
           const parsed = JSON.parse(jsonStr);
           if (Array.isArray(parsed) && parsed.length >= 2) {
-            const eventName = typeof parsed[0] === 'string' ? parsed[0] : 'ack';
-            const payload = parsed.length === 2 ? parsed[1] : parsed.slice(1);
-            this.handleEventPayload(eventName, payload, connId, generation);
+            if (typeof parsed[0] === 'string') {
+              const eventName = parsed[0];
+              const payload = parsed.length === 2 ? parsed[1] : parsed.slice(1);
+              this.handleEventPayload(eventName, payload, connId, generation);
+            } else {
+              // ACK packet or unnamed array containing balance payload e.g. 430[10000, 1] or [10000]
+              this.processUpdateBalance(parsed, connId, generation);
+            }
           } else if (Array.isArray(parsed) && parsed.length === 1) {
             if (typeof parsed[0] === 'string') {
               this.handleEventPayload(parsed[0], null, connId, generation);
             } else if (typeof parsed[0] === 'object' && parsed[0] !== null) {
+              this.processUpdateBalance(parsed[0], connId, generation);
+            } else if (typeof parsed[0] === 'number') {
               this.processUpdateBalance(parsed[0], connId, generation);
             }
           }
@@ -1344,6 +1360,10 @@ export class PocketOptionService {
       norm === 'user' ||
       norm === 'profile' ||
       norm === 'user_profile' ||
+      norm === 'loaduser' ||
+      norm === 'userload' ||
+      norm === 'loadprofile' ||
+      norm === 'account' ||
       norm === 'change-account' ||
       norm === 'changeaccount' ||
       norm === 'change_account'
@@ -1351,7 +1371,7 @@ export class PocketOptionService {
       if (this.subsystems.auth === 'pending') {
         this.handleAuthSuccess(payload, connId, generation);
       }
-      if (payload && typeof payload === 'object') {
+      if (payload !== null && payload !== undefined) {
         this.processUpdateBalance(payload, connId, generation);
       }
       return;
@@ -1386,8 +1406,31 @@ export class PocketOptionService {
       return;
     }
 
-    if (norm === 'closeorder' || norm === 'deals_close' || norm === 'deal_closed') {
-      this.processDealClosed(payload);
+    if (
+      norm === 'closeorder' ||
+      norm === 'successcloseorder' ||
+      norm === 'successclose_order' ||
+      norm === 'deals_close' ||
+      norm === 'deal_closed' ||
+      norm === 'deals_closed' ||
+      norm === 'updatecloseddeals' ||
+      norm === 'update_closed_deals' ||
+      norm === 'closeddeals'
+    ) {
+      const isBulkHistory =
+        norm === 'updatecloseddeals' ||
+        norm === 'update_closed_deals' ||
+        norm === 'closeddeals';
+      this.processDealClosed(payload, isBulkHistory);
+      return;
+    }
+
+    if (
+      norm === 'updateopeneddeals' ||
+      norm === 'update_opened_deals' ||
+      norm === 'openeddeals'
+    ) {
+      this.processOpenedDealsUpdate(payload);
       return;
     }
 
@@ -1545,24 +1588,80 @@ export class PocketOptionService {
 
     // Extract initial balance if present in auth payload
     if (payload && typeof payload === 'object') {
-      const rawBal =
-        payload.balance !== undefined
-          ? payload.balance
-          : activeMode === 'REAL'
-          ? payload.real_balance ?? payload.realBalance ?? payload.amount
-          : payload.demo_balance ?? payload.demoBalance ?? payload.amount;
-      if (rawBal !== undefined && rawBal !== null) {
-        const b = typeof rawBal === 'number' ? rawBal : parseFloat(String(rawBal));
-        if (!isNaN(b) && b >= 0) {
+      const demoBal =
+        payload.demo_balance ??
+        payload.demoBalance ??
+        payload.demo ??
+        payload.balances?.demo ??
+        payload.data?.demo_balance ??
+        payload.user?.demo_balance;
+
+      const realBal =
+        payload.real_balance ??
+        payload.realBalance ??
+        payload.real ??
+        payload.balances?.real ??
+        payload.data?.real_balance ??
+        payload.user?.real_balance;
+
+      const currency = payload.currency || 'USD';
+
+      if (demoBal !== undefined && demoBal !== null) {
+        const db = typeof demoBal === 'number' ? demoBal : parseFloat(String(demoBal));
+        if (!isNaN(db) && db >= 0) {
           this.accountManager.updateBalance(
             this.accountManager.getSessionGeneration(),
-            activeMode,
-            b,
-            payload.currency || 'USD'
+            'DEMO',
+            db,
+            currency
           );
-          this.subsystems.account = 'LIVE';
-          this.log(`Account balance extracted on authentication: $${b.toFixed(2)} (${activeMode} ACCOUNT)`);
         }
+      }
+
+      if (realBal !== undefined && realBal !== null) {
+        const rb = typeof realBal === 'number' ? realBal : parseFloat(String(realBal));
+        if (!isNaN(rb) && rb >= 0) {
+          this.accountManager.updateBalance(
+            this.accountManager.getSessionGeneration(),
+            'REAL',
+            rb,
+            currency
+          );
+        }
+      }
+
+      let activeBal: number | undefined;
+      if (activeMode === 'DEMO') {
+        if (demoBal !== undefined && demoBal !== null) {
+          activeBal = Number(demoBal);
+        } else if (payload.isDemo === 1 && payload.balance !== undefined) {
+          activeBal = Number(payload.balance);
+        } else if (payload.balance !== undefined && realBal === undefined) {
+          activeBal = Number(payload.balance);
+        } else if (payload.amount !== undefined) {
+          activeBal = Number(payload.amount);
+        }
+      } else {
+        if (realBal !== undefined && realBal !== null) {
+          activeBal = Number(realBal);
+        } else if (payload.isDemo === 0 && payload.balance !== undefined) {
+          activeBal = Number(payload.balance);
+        } else if (payload.balance !== undefined && demoBal === undefined) {
+          activeBal = Number(payload.balance);
+        } else if (payload.amount !== undefined) {
+          activeBal = Number(payload.amount);
+        }
+      }
+
+      if (activeBal !== undefined && !isNaN(activeBal) && activeBal >= 0) {
+        this.accountManager.updateBalance(
+          this.accountManager.getSessionGeneration(),
+          activeMode,
+          activeBal,
+          currency
+        );
+        this.subsystems.account = 'LIVE';
+        this.log(`Account balance extracted on authentication: $${activeBal.toFixed(2)} (${activeMode} ACCOUNT)`);
       }
     }
 
@@ -1586,10 +1685,10 @@ export class PocketOptionService {
     this.log(`[AUTH] Authentication state: VERIFIED (${activeMode}${this.authUid ? `, UID: ${this.authUid}` : ''})`);
 
     // Check if early account packet was buffered prior to auth confirmation
-    const earlyBalance = this.earlyAccountMessageBuffer.find((b) => b.generation === generation);
-    if (earlyBalance) {
-      this.log(`[PO-DEBUG] Replaying early buffered balance message for generation: ${generation}`);
-      this.processUpdateBalance(earlyBalance.payload, connId, generation);
+    const earlyBalances = this.earlyAccountMessageBuffer.filter((b) => b.generation === generation);
+    for (const eb of earlyBalances) {
+      this.log(`[PO-DEBUG] Replaying early buffered balance message (${eb.eventName}) for generation: ${generation}`);
+      this.processUpdateBalance(eb.payload, connId, generation);
     }
 
     this.authDemoFallbackAttempted = null;
@@ -1598,12 +1697,10 @@ export class PocketOptionService {
     if (this.subsystems.account !== 'LIVE') {
       this.subsystems.account = 'LOADING';
     }
-    // Request account balance using standard Pocket Option protocol only
-    if (this.subsystems.account !== 'LIVE') {
-      this.subsystems.account = 'LOADING';
-    }
     this.sendPacket(`42["change-account",{"isDemo":${activeMode === 'DEMO' ? 1 : 0}}]`);
     this.sendPacket('42["updateBalance"]');
+    this.sendPacket('42["user"]');
+    this.sendPacket('42["profile"]');
     this.scheduleBalanceTimeout();
 
     // Fast balance retry probe
@@ -1611,6 +1708,8 @@ export class PocketOptionService {
       if (this.ws && this.ws.readyState === WebSocket.OPEN && this.authVerified && this.accountInfo.balance === null) {
         this.sendPacket(`42["change-account",{"isDemo":${activeMode === 'DEMO' ? 1 : 0}}]`);
         this.sendPacket('42["updateBalance"]');
+        this.sendPacket('42["user"]');
+        this.sendPacket('42["profile"]');
       }
     }, 1200);
 
@@ -1814,29 +1913,66 @@ export class PocketOptionService {
           currency = payload.currency;
         }
 
-        // Try direct properties
-        const rawBal =
-          payload.balance !== undefined
-            ? payload.balance
-            : targetMode === 'REAL'
-            ? payload.real_balance ?? payload.realBalance ?? payload.real ?? payload.amount ?? payload.value
-            : payload.demo_balance ?? payload.demoBalance ?? payload.demo ?? payload.amount ?? payload.value;
+        const demoBal =
+          payload.demo_balance ??
+          payload.demoBalance ??
+          payload.demo ??
+          payload.balances?.demo ??
+          payload.data?.demo_balance ??
+          payload.user?.demo_balance;
 
-        if (rawBal !== undefined && rawBal !== null) {
-          balanceNum = typeof rawBal === 'number' ? rawBal : parseFloat(String(rawBal));
-        } else if (payload.balances && typeof payload.balances === 'object') {
-          const balObj = targetMode === 'REAL' ? payload.balances.real ?? payload.balances.real_balance : payload.balances.demo ?? payload.balances.demo_balance;
-          if (balObj !== undefined && balObj !== null) balanceNum = Number(balObj);
-        } else if (payload.data && typeof payload.data === 'object') {
-          const innerBal =
-            payload.data.balance ??
-            (targetMode === 'REAL'
-              ? payload.data.real_balance ?? payload.data.realBalance ?? payload.data.amount
-              : payload.data.demo_balance ?? payload.data.demoBalance ?? payload.data.amount);
-          if (innerBal !== undefined && innerBal !== null) balanceNum = Number(innerBal);
-        } else if (payload.user && typeof payload.user === 'object') {
-          const uBal = payload.user.balance ?? (targetMode === 'REAL' ? payload.user.real_balance : payload.user.demo_balance);
-          if (uBal !== undefined && uBal !== null) balanceNum = Number(uBal);
+        const realBal =
+          payload.real_balance ??
+          payload.realBalance ??
+          payload.real ??
+          payload.balances?.real ??
+          payload.data?.real_balance ??
+          payload.user?.real_balance;
+
+        if (demoBal !== undefined && demoBal !== null) {
+          const dn = Number(demoBal);
+          if (!isNaN(dn)) {
+            this.accountManager.updateBalance(
+              generation || this.accountManager.getSessionGeneration(),
+              'DEMO',
+              dn,
+              currency
+            );
+          }
+        }
+        if (realBal !== undefined && realBal !== null) {
+          const rn = Number(realBal);
+          if (!isNaN(rn)) {
+            this.accountManager.updateBalance(
+              generation || this.accountManager.getSessionGeneration(),
+              'REAL',
+              rn,
+              currency
+            );
+          }
+        }
+
+        // Determine active mode balance with highest fidelity
+        if (activeMode === 'DEMO') {
+          if (demoBal !== undefined && demoBal !== null) {
+            balanceNum = Number(demoBal);
+          } else if (targetMode === 'DEMO' && payload.balance !== undefined) {
+            balanceNum = Number(payload.balance);
+          } else if (payload.balance !== undefined && realBal === undefined) {
+            balanceNum = Number(payload.balance);
+          } else if (payload.amount !== undefined) {
+            balanceNum = Number(payload.amount);
+          }
+        } else {
+          if (realBal !== undefined && realBal !== null) {
+            balanceNum = Number(realBal);
+          } else if (targetMode === 'REAL' && payload.balance !== undefined) {
+            balanceNum = Number(payload.balance);
+          } else if (payload.balance !== undefined && demoBal === undefined) {
+            balanceNum = Number(payload.balance);
+          } else if (payload.amount !== undefined) {
+            balanceNum = Number(payload.amount);
+          }
         }
       }
     }
@@ -1855,15 +1991,13 @@ export class PocketOptionService {
         currency
       );
 
-      // Update activeMode context balance ONLY if targetMode matches activeMode
-      if (targetMode === activeMode) {
-        this.accountManager.updateBalance(
-          this.accountManager.getSessionGeneration(),
-          activeMode,
-          balanceNum,
-          currency
-        );
-      }
+      // Always synchronize activeMode context with the extracted balance
+      this.accountManager.updateBalance(
+        this.accountManager.getSessionGeneration(),
+        activeMode,
+        balanceNum,
+        currency
+      );
 
       this.accountInfo = this.accountManager.buildAccountInfo();
       this.subsystems.account = 'LIVE';
@@ -2039,7 +2173,8 @@ export class PocketOptionService {
   }
 
   private processDealSuccess(payload: any): void {
-    const rawReqId = payload?.requestId ?? payload?.request_id;
+    const rawItem = Array.isArray(payload) ? payload[0] : (payload?.deal ?? payload?.data ?? payload);
+    const rawReqId = rawItem?.requestId ?? rawItem?.request_id ?? payload?.requestId ?? payload?.request_id;
     const reqId = rawReqId !== undefined ? Number(rawReqId) : null;
 
     let pending: { resolve: (res: any) => void; timer: NodeJS.Timeout; params: any } | undefined;
@@ -2058,27 +2193,44 @@ export class PocketOptionService {
       clearTimeout(pending.timer);
     }
 
-    const dealId = String(payload?.id || payload?.ticket || `deal_${Date.now()}`);
+    const dealId = String(
+      rawItem?.id ||
+      rawItem?.ticket ||
+      rawItem?.ticketId ||
+      rawItem?.orderId ||
+      rawItem?.deal_id ||
+      `deal_${Date.now()}`
+    );
+    const rawOpenTs = Number(rawItem?.openTimestamp ?? rawItem?.open_timestamp ?? Math.floor(Date.now() / 1000));
+    const openTimeSec = rawOpenTs > 1e11 ? Math.floor(rawOpenTs / 1000) : rawOpenTs;
+    const rawCloseTs = Number(
+      rawItem?.closeTimestamp ??
+      rawItem?.close_timestamp ??
+      (openTimeSec + (pending?.params?.time || 60))
+    );
+    const closeTimeSec = rawCloseTs > 1e11 ? Math.floor(rawCloseTs / 1000) : rawCloseTs;
+
     const normalizedDeal = {
       id: dealId,
       ticketId: dealId,
-      asset: payload?.asset || pending?.params?.asset || this.activeAsset,
-      amount: payload?.amount || pending?.params?.amount || 1,
-      action: payload?.command || payload?.action || pending?.params?.action || 'call',
-      isDemo: payload?.isDemo === 1 || payload?.is_demo === 1 || pending?.params?.isDemo === 1,
-      accountMode: (payload?.isDemo === 1 || payload?.is_demo === 1 || pending?.params?.isDemo === 1) ? 'DEMO' : 'REAL',
+      requestId: reqId || pending?.params?.requestId,
+      asset: rawItem?.asset || pending?.params?.asset || this.activeAsset,
+      amount: rawItem?.amount || pending?.params?.amount || 1,
+      action: rawItem?.command || rawItem?.action || pending?.params?.action || 'call',
+      isDemo: rawItem?.isDemo === 1 || rawItem?.is_demo === 1 || pending?.params?.isDemo === 1,
+      accountMode: (rawItem?.isDemo === 1 || rawItem?.is_demo === 1 || pending?.params?.isDemo === 1) ? 'DEMO' : 'REAL',
       timeframe: pending?.params?.time || this.timeframe || 60,
       strategyName: pending?.params?.strategyName || 'توافق الاستراتيجيات (Confluence Matrix)',
       reasons: pending?.params?.reasons || [],
       confluenceScore: pending?.params?.confluenceScore || 0,
-      openPrice: Number(payload?.openPrice ?? payload?.open_price ?? 0),
-      entryPrice: Number(payload?.openPrice ?? payload?.open_price ?? 0),
-      openTime: Number(payload?.openTimestamp ?? payload?.open_timestamp ?? Math.floor(Date.now() / 1000)),
-      closeTime: Number(payload?.closeTimestamp ?? payload?.close_timestamp ?? (Math.floor(Date.now() / 1000) + (pending?.params?.time || 60))),
+      openPrice: Number(rawItem?.openPrice ?? rawItem?.open_price ?? 0),
+      entryPrice: Number(rawItem?.openPrice ?? rawItem?.open_price ?? 0),
+      openTime: openTimeSec,
+      closeTime: closeTimeSec,
       status: 'OPEN',
       profit: 0,
-      payout: payload?.percentProfit ?? payload?.percent_profit ?? 88,
-      raw: payload,
+      payout: rawItem?.percentProfit ?? rawItem?.percent_profit ?? 88,
+      raw: rawItem,
     };
 
     this.activeDeals.set(dealId, normalizedDeal);
@@ -2105,9 +2257,10 @@ export class PocketOptionService {
   }
 
   private processDealFailure(payload: any): void {
-    const rawReqId = payload?.requestId ?? payload?.request_id;
+    const rawItem = Array.isArray(payload) ? payload[0] : (payload?.deal ?? payload?.data ?? payload);
+    const rawReqId = rawItem?.requestId ?? rawItem?.request_id ?? payload?.requestId ?? payload?.request_id;
     const reqId = rawReqId !== undefined ? Number(rawReqId) : null;
-    const errMsg = payload?.error || payload?.message || 'Pocket Option rejected the deal request.';
+    const errMsg = rawItem?.error || rawItem?.message || payload?.error || payload?.message || 'Pocket Option rejected the deal request.';
 
     let pending: { resolve: (res: any) => void; timer: NodeJS.Timeout; params: any } | undefined;
     if (reqId && this.pendingDealOrders.has(reqId)) {
@@ -2133,40 +2286,133 @@ export class PocketOptionService {
     this.log(`[PO-TRADE] Deal opening FAILED: ${errMsg}`, 'warn');
   }
 
-  private processDealClosed(payload: any): void {
-    const dealId = String(payload?.id || payload?.ticket || '');
-    let existing = this.activeDeals.get(dealId);
-    if (!existing && payload?.id) {
-      existing = {
+  private processDealClosed(payload: any, isBulkHistory: boolean = false): void {
+    let items: any[] = [];
+    if (Array.isArray(payload)) {
+      items = payload;
+    } else if (payload && typeof payload === 'object') {
+      if (Array.isArray(payload.deals)) items = payload.deals;
+      else if (Array.isArray(payload.data)) items = payload.data;
+      else if (Array.isArray(payload.items)) items = payload.items;
+      else items = [payload];
+    }
+
+    if (items.length === 0) return;
+
+    let closedAnyInCurrentSession = false;
+
+    for (const item of items) {
+      if (!item || typeof item !== 'object') continue;
+
+      const dealId = String(item?.id || item?.ticket || item?.ticketId || item?.orderId || item?.deal_id || '');
+      if (!dealId || this.closedDealIds.has(dealId)) {
+        continue;
+      }
+
+      let existingKey: string | null = this.activeDeals.has(dealId) ? dealId : null;
+      let existing = existingKey ? this.activeDeals.get(existingKey) : undefined;
+
+      // Fallback match if Pocket Option changed deal ID format or matched by requestId / asset+amount+openTime
+      if (!existing) {
+        const itemReqId = item?.requestId ?? item?.request_id;
+        const itemAsset = item?.asset;
+        const itemAmount = Number(item?.amount ?? 0);
+        const rawOpenTs = Number(item?.openTimestamp ?? item?.open_timestamp ?? 0);
+        const itemOpenSec = rawOpenTs > 1e11 ? Math.floor(rawOpenTs / 1000) : rawOpenTs;
+
+        for (const [k, candidate] of this.activeDeals.entries()) {
+          if (
+            (itemReqId !== undefined && candidate.requestId && Number(candidate.requestId) === Number(itemReqId)) ||
+            (itemAsset &&
+              candidate.asset === itemAsset &&
+              (itemAmount <= 0 || Math.abs(Number(candidate.amount) - itemAmount) < 0.01) &&
+              itemOpenSec > 0 &&
+              Math.abs((candidate.openTime || 0) - itemOpenSec) <= 15)
+          ) {
+            existing = candidate;
+            existingKey = k;
+            break;
+          }
+        }
+      }
+
+      const rawCloseTs = Number(item?.closeTimestamp ?? item?.close_timestamp ?? Math.floor(Date.now() / 1000));
+      const closeTimestamp = rawCloseTs > 1e11 ? Math.floor(rawCloseTs / 1000) : rawCloseTs;
+
+      // Track ID to guarantee strictly once-per-deal emission across successcloseOrder + updateClosedDeals
+      this.closedDealIds.add(dealId);
+      if (this.closedDealIds.size > 500) {
+        const firstId = this.closedDealIds.values().next().value;
+        if (firstId !== undefined) this.closedDealIds.delete(firstId);
+      }
+
+      // If bulk history pushes pre-session historical deals not opened in this session, store in history silently
+      if (isBulkHistory && !existing && closeTimestamp < this.sessionStartTimestampSec - 5) {
+        const histProfit = Number(item?.profit ?? 0);
+        const histClosePrice = Number(item?.closePrice ?? item?.close_price ?? 0);
+        const histOpenTs = Number(item?.openTimestamp ?? item?.open_timestamp ?? closeTimestamp - 60);
+        const histOpenSec = histOpenTs > 1e11 ? Math.floor(histOpenTs / 1000) : histOpenTs;
+        if (!this.dealsHistory.some((h) => String(h.id || h.ticketId) === dealId)) {
+          this.dealsHistory.push({
+            id: dealId,
+            ticketId: dealId,
+            asset: item?.asset || this.activeAsset,
+            amount: Number(item?.amount ?? 0),
+            action: item?.command || item?.action || 'call',
+            isDemo: item?.isDemo === 1 || item?.is_demo === 1,
+            accountMode: item?.isDemo === 1 || item?.is_demo === 1 ? 'DEMO' : 'REAL',
+            openPrice: Number(item?.openPrice ?? item?.open_price ?? 0),
+            entryPrice: Number(item?.openPrice ?? item?.open_price ?? 0),
+            closePrice: histClosePrice,
+            exitPrice: histClosePrice,
+            openTime: histOpenSec,
+            closeTime: closeTimestamp,
+            durationSec: Math.max(1, closeTimestamp - histOpenSec),
+            profit: histProfit,
+            status: histProfit > 0 ? 'WIN' : histProfit === 0 ? 'REFUND' : 'LOSS',
+            result: histProfit > 0 ? 'WIN' : histProfit === 0 ? 'REFUND' : 'LOSS',
+          });
+          if (this.dealsHistory.length > 200) this.dealsHistory.pop();
+        }
+        continue;
+      }
+
+      if (existingKey) {
+        this.activeDeals.delete(existingKey);
+      }
+      if (existing && existing.id && existing.id !== dealId) {
+        this.closedDealIds.add(String(existing.id));
+      }
+
+      const rawOpenTs = Number(item?.openTimestamp ?? item?.open_timestamp ?? existing?.openTime ?? (closeTimestamp - (existing?.timeframe || this.timeframe || 60)));
+      const openTimestamp = rawOpenTs > 1e11 ? Math.floor(rawOpenTs / 1000) : rawOpenTs;
+      const baseDeal = existing || {
         id: dealId,
         ticketId: dealId,
-        asset: payload?.asset || this.activeAsset,
-        amount: payload?.amount || 0,
-        action: payload?.command || payload?.action || 'call',
-        isDemo: payload?.isDemo === 1,
-        accountMode: payload?.isDemo === 1 ? 'DEMO' : 'REAL',
+        asset: item?.asset || this.activeAsset,
+        amount: Number(item?.amount ?? 0),
+        action: item?.command || item?.action || 'call',
+        isDemo: item?.isDemo === 1 || item?.is_demo === 1,
+        accountMode: item?.isDemo === 1 || item?.is_demo === 1 ? 'DEMO' : 'REAL',
         timeframe: this.timeframe || 60,
         strategyName: 'توافق الاستراتيجيات (Confluence Matrix)',
         reasons: [],
         confluenceScore: 0,
-        openPrice: Number(payload?.openPrice ?? payload?.open_price ?? 0),
-        entryPrice: Number(payload?.openPrice ?? payload?.open_price ?? 0),
-        openTime: Number(payload?.openTimestamp ?? payload?.open_timestamp ?? 0),
+        openPrice: Number(item?.openPrice ?? item?.open_price ?? 0),
+        entryPrice: Number(item?.openPrice ?? item?.open_price ?? 0),
+        openTime: openTimestamp,
       };
-    }
 
-    if (existing) {
-      this.activeDeals.delete(dealId);
-      const closePrice = Number(payload?.closePrice ?? payload?.close_price ?? 0);
-      const profit = Number(payload?.profit ?? 0);
+      const closePrice = Number(item?.closePrice ?? item?.close_price ?? 0);
+      const profit = Number(item?.profit ?? 0);
       const isWin = profit > 0;
       const isRefund = profit === 0;
-      const closeTimestamp = Number(payload?.closeTimestamp ?? payload?.close_timestamp ?? Math.floor(Date.now() / 1000));
-      const openTimestamp = Number(existing.openTime || Math.floor(Date.now() / 1000) - (existing.timeframe || 60));
-      const durationSec = Math.max(1, closeTimestamp - openTimestamp);
+      const durationSec = Math.max(1, closeTimestamp - (baseDeal.openTime || openTimestamp));
 
       const closedDeal = {
-        ...existing,
+        ...baseDeal,
+        id: dealId,
+        ticketId: baseDeal.ticketId || dealId,
         closePrice,
         exitPrice: closePrice,
         closeTime: closeTimestamp,
@@ -2180,9 +2426,7 @@ export class PocketOptionService {
       if (this.dealsHistory.length > 200) this.dealsHistory.pop();
 
       this.log(`[PO-TRADE] Deal CLOSED: #${dealId} | Result: ${closedDeal.result} | Profit: $${profit.toFixed(2)} | Duration: ${durationSec}s`);
-
-      // Refresh balance upon deal close
-      this.requestBalance();
+      closedAnyInCurrentSession = true;
 
       for (const listener of this.onDealClosedListeners) {
         try {
@@ -2190,6 +2434,53 @@ export class PocketOptionService {
         } catch (err) {
           console.warn('[PO-ENGINE] onDealClosed listener notice:', err);
         }
+      }
+    }
+
+    if (closedAnyInCurrentSession) {
+      this.requestBalance();
+    }
+  }
+
+  private processOpenedDealsUpdate(payload: any): void {
+    let items: any[] = [];
+    if (Array.isArray(payload)) {
+      items = payload;
+    } else if (payload && typeof payload === 'object') {
+      if (Array.isArray(payload.deals)) items = payload.deals;
+      else if (Array.isArray(payload.data)) items = payload.data;
+    }
+
+    const openIds = new Set<string>();
+    for (const item of items) {
+      if (!item || typeof item !== 'object') continue;
+      const dealId = String(item?.id || item?.ticket || item?.ticketId || item?.orderId || '');
+      if (!dealId) continue;
+      openIds.add(dealId);
+
+      const existing = this.activeDeals.get(dealId);
+      if (existing) {
+        const openPrice = Number(item?.openPrice ?? item?.open_price ?? 0);
+        if (openPrice > 0 && !existing.openPrice) {
+          existing.openPrice = openPrice;
+          existing.entryPrice = openPrice;
+        }
+      }
+    }
+
+    // If an active deal has passed its expiry and is no longer listed in authoritative open deals, request closed deals
+    if (this.activeDeals.size > 0) {
+      const nowSec = Math.floor(Date.now() / 1000);
+      let hasMissingExpired = false;
+      for (const [id, deal] of this.activeDeals.entries()) {
+        if (!openIds.has(id) && deal.closeTime && nowSec >= Number(deal.closeTime) + 5) {
+          hasMissingExpired = true;
+          break;
+        }
+      }
+      if (hasMissingExpired) {
+        this.sendPacket('42["deals/load"]');
+        this.requestBalance();
       }
     }
   }

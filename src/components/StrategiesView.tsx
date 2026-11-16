@@ -19,7 +19,6 @@ import {
   Zap,
 } from 'lucide-react';
 import { IndicatorMetrics, Signal, StrategyResult, StrategySettings } from '../types';
-import { AiApiKeySection } from './AiApiKeySection';
 import { useLanguage } from '../i18n/LanguageContext';
 
 interface StrategiesViewProps {
@@ -99,7 +98,7 @@ const STRATEGY_CATALOG: StrategyMeta[] = [
     description: '%K and %D lines crossing inside extreme 20/80 boundaries',
   },
   {
-    id: 'cci',
+    id: 'cci_strategy',
     name: 'CCI Trend Oscillator',
     category: 'Oscillator',
     description: 'Commodity Channel Index measuring deviation from statistical mean',
@@ -111,19 +110,25 @@ const STRATEGY_CATALOG: StrategyMeta[] = [
     description: 'Average Directional Index (>25) verifying true directional trend persistence',
   },
   {
+    id: 'supertrend',
+    name: 'SuperTrend ATR Filter',
+    category: 'Trend',
+    description: 'Dynamic ATR-based trailing trend stop confirming bullish or bearish regime',
+  },
+  {
     id: 'parabolic_sar',
     name: 'Parabolic SAR Acceleration',
     category: 'Trend',
     description: 'Stop-and-reverse price trailing dots indicating momentum continuation',
   },
   {
-    id: 'ichimoku',
+    id: 'ichimoku_cloud',
     name: 'Ichimoku Cloud Tenkan/Kijun',
     category: 'Trend',
     description: 'Tenkan-sen crossing Kijun-sen with cloud (Kumo) thickness confirmation',
   },
   {
-    id: 'candlestick',
+    id: 'candlestick_pattern',
     name: 'Candlestick Patterns',
     category: 'Price Action',
     description: 'High-probability candlestick formations (Engulfing, Pinbars, Morning Stars)',
@@ -173,6 +178,12 @@ const STRATEGY_CATALOG: StrategyMeta[] = [
     name: 'ATR Volatility Expansion',
     category: 'Volatility',
     description: 'Dynamic volatility filtering against excessive consolidation or erratic spreads',
+  },
+  {
+    id: 'volume_flow',
+    name: 'Volume Flow Analysis',
+    category: 'Momentum',
+    description: 'Tick volume impulse & price participation analysis confirming institutional moves',
   },
   {
     id: 'gann_price_time',
@@ -884,15 +895,6 @@ export const StrategiesView: React.FC<StrategiesViewProps> = ({
           );
         })}
       </div>
-
-      {/* 4. AI API KEY & GOOGLE GEMINI REAL-TIME CHART ANALYSIS */}
-      <AiApiKeySection
-        activeAsset={activeAsset}
-        timeframe={timeframe}
-        currentPrice={currentPrice}
-        activeSignal={activeSignal}
-        indicators={indicators}
-      />
 
       {/* 5. Modal for Parameter Tweaking */}
       {settingsModalStrat && (

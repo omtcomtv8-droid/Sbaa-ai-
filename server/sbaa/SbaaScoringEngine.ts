@@ -130,7 +130,22 @@ export class SbaaScoringEngine {
       pattern?.type?.includes('MACD') ||
       pattern?.type?.includes('SUPERTREND') ||
       pattern?.type?.includes('ALIGNMENT') ||
-      pattern?.type?.includes('INTEGRATED')
+      pattern?.type?.includes('INTEGRATED') ||
+      pattern?.type?.includes('ICHIMOKU') ||
+      pattern?.type?.includes('PARABOLIC_SAR') ||
+      pattern?.type?.includes('MULTI_CONFLUENCE') ||
+      pattern?.type?.includes('SMA_CROSSOVER') ||
+      pattern?.type?.includes('CCI_STRATEGY') ||
+      pattern?.type?.includes('VOLUME_FLOW') ||
+      pattern?.type?.includes('DARVAS') ||
+      pattern?.type?.includes('ELLIOTT') ||
+      pattern?.type?.includes('GANN') ||
+      pattern?.type?.includes('MARKET_STRUCTURE') ||
+      pattern?.type?.includes('ATR_VOLATILITY') ||
+      pattern?.type?.includes('BOLLINGER_SQUEEZE') ||
+      pattern?.type?.includes('PULLBACK_CONTINUATION') ||
+      pattern?.type === 'THREE_WHITE_SOLDIERS' ||
+      pattern?.type === 'THREE_BLACK_CROWS'
     );
 
     if (!isTrendOrBreakout) {
@@ -197,6 +212,9 @@ export class SbaaScoringEngine {
       } else if (distToSupport <= srTolerance * 1.5) {
         srLocationScore = 8;
         reasons.push('السعر يقترب من منطقة الدعم');
+      } else if (isTrendOrBreakout && (c0.close > nearestResistance || (ema20 !== null && ema50 !== null && ema20 > ema50 && c0.close > ema20))) {
+        srLocationScore = c0.close > nearestResistance ? 15 : 12;
+        reasons.push('تموضع اتجاهي/اختراقي سليم مع زخم صاعد مؤكد');
       }
     } else {
       if (distToResistance <= srTolerance * 0.5) {
@@ -208,6 +226,9 @@ export class SbaaScoringEngine {
       } else if (distToResistance <= srTolerance * 1.5) {
         srLocationScore = 8;
         reasons.push('السعر يقترب من منطقة المقاومة');
+      } else if (isTrendOrBreakout && (c0.close < nearestSupport || (ema20 !== null && ema50 !== null && ema20 < ema50 && c0.close < ema20))) {
+        srLocationScore = c0.close < nearestSupport ? 15 : 12;
+        reasons.push('تموضع اتجاهي/اختراقي سليم مع ضغط بيعي مؤكد');
       }
     }
 
@@ -227,7 +248,9 @@ export class SbaaScoringEngine {
       patternScore = 0;
     }
 
-    // 4. Wick & Liquidity Analysis (15 pts)
+    // 4. Wick, Liquidity & Candle Conviction Analysis (15 pts)
+    const isBullishClose0 = c0.close > c0.open;
+    const isBearishClose0 = c0.close < c0.open;
     if (intendedDirection === 'BUY') {
       if (lowerWickRatio >= 0.50) {
         wickLiquidityScore += 10;
@@ -235,6 +258,9 @@ export class SbaaScoringEngine {
       } else if (lowerWickRatio >= 0.30) {
         wickLiquidityScore += 6;
         reasons.push('ضغط شرائي ملحوظ من القاع');
+      } else if (isTrendOrBreakout && isBullishClose0 && bodyRatio >= 0.55 && upperWickRatio <= 0.25) {
+        wickLiquidityScore += 10;
+        reasons.push(`إغلاق شرائي حاسم بزخم جسم قوي (${(bodyRatio * 100).toFixed(0)}%)`);
       }
       if (pattern?.type === 'LIQUIDITY_SWEEP_LOW') {
         wickLiquidityScore = 15;
@@ -247,6 +273,9 @@ export class SbaaScoringEngine {
       } else if (upperWickRatio >= 0.30) {
         wickLiquidityScore += 6;
         reasons.push('ضغط بيعي ملحوظ من القمة');
+      } else if (isTrendOrBreakout && isBearishClose0 && bodyRatio >= 0.55 && lowerWickRatio <= 0.25) {
+        wickLiquidityScore += 10;
+        reasons.push(`إغلاق بيعي حاسم بزخم جسم قوي (${(bodyRatio * 100).toFixed(0)}%)`);
       }
       if (pattern?.type === 'LIQUIDITY_SWEEP_HIGH') {
         wickLiquidityScore = 15;

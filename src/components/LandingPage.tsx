@@ -1,45 +1,31 @@
 import React, { useState } from 'react';
 import {
-  Sparkles,
-  Eye,
   TrendingUp,
   ShieldCheck,
   Zap,
   Lock,
-  Compass,
   Layers,
-  BarChart3,
-  Cpu,
-  ArrowRight,
-  ArrowLeft,
-  ChevronDown,
-  CheckCircle2,
   AlertTriangle,
-  FileCheck2,
   Terminal,
   Activity,
   Globe,
-  SlidersHorizontal,
   LogIn,
   LogOut,
   UserCheck,
   Key,
-  Wifi,
   Smartphone,
   Bot,
-  ShieldAlert,
 } from 'lucide-react';
 import { DiagnosticsInfo } from '../types';
 import { GatewayOnboardingCard } from './GatewayOnboardingCard';
 import { DemoPlatformActivityCard } from './DemoPlatformActivityCard';
 import { useLanguage, LanguageSwitcher } from '../i18n/LanguageContext';
+import { BrandLogo } from './BrandLogo';
 
 interface LandingPageProps {
   onEnterTerminal?: () => void;
   onLaunchTerminal?: () => void;
-  onOpenVision: () => void;
   onOpenScanner?: () => void;
-  onOpenAI?: () => void;
   onOpenSettings?: () => void;
   firebaseUser?: {
     uid: string;
@@ -70,9 +56,7 @@ interface LandingPageProps {
 export const LandingPage: React.FC<LandingPageProps> = ({
   onEnterTerminal,
   onLaunchTerminal,
-  onOpenVision,
   onOpenScanner,
-  onOpenAI,
   onOpenSettings,
   firebaseUser,
   onSignInGoogle,
@@ -92,7 +76,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [highlightCard, setHighlightCard] = useState(false);
   const { t, tTerm, tDynamic, isRTL } = useLanguage();
   const handleTerminal = onEnterTerminal || onLaunchTerminal || (() => {});
-  const handleScanner = onOpenScanner || onOpenAI || (() => {});
+  const handleScanner = onOpenScanner || handleTerminal;
 
   const handleTerminalGuard = () => {
     handleTerminal();
@@ -100,43 +84,34 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   return (
     <div id="sabaa-landing-page" className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-amber-500/30 selection:text-amber-200">
       {/* Top Floating Announcement Bar */}
-      <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/20 to-amber-500/10 border-b border-amber-500/20 py-2 px-4 text-center text-xs text-amber-300 flex items-center justify-center gap-2">
-        <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-        <span className="font-semibold">{tDynamic('Institutional Update:')}</span>
-        <span>{tDynamic('Launch of AI Computer Vision and Institutional Liquidity Confluence (SMC / ICT) Engine.')}</span>
-        <button
-          onClick={onOpenVision}
-          className="underline hover:text-amber-200 font-bold mx-2 text-[11px] cursor-pointer"
-        >
-          {tDynamic('Try Computer Vision &rarr;')}
-        </button>
+      <div className="bg-gradient-to-r from-emerald-500/10 via-amber-500/15 to-emerald-500/10 border-b border-emerald-500/20 py-2 px-4 text-center text-xs text-emerald-300 flex items-center justify-center gap-2">
+        <Activity className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+        <span className="font-semibold">{isRTL ? 'تحديث المحرك:' : 'Engine Update:'}</span>
+        <span>{isRTL ? 'تشغيل منظومة التوافق الخوارزمي الـ 26 وسيولة SMC / ICT مع التنفيذ الفعلي للحساب الحقيقي.' : '26 Algorithmic Strategy Modules & SMC / ICT Liquidity Confluence Live on Real Account.'}</span>
       </div>
 
       {/* Main Navigation */}
       <nav className="border-b border-slate-800/80 bg-slate-950/90 backdrop-blur sticky top-0 z-40 px-4 lg:px-8 py-3.5">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-slate-950 font-black text-xl shadow-lg shadow-amber-500/20 border border-amber-300">
-              S
-            </div>
+            <BrandLogo size="md" className="shrink-0" />
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-black text-lg tracking-tight bg-gradient-to-r from-amber-200 via-amber-400 to-amber-500 bg-clip-text text-transparent">
-                  SABAA AI SOLUTION
+                <span className="font-black text-lg tracking-tight bg-gradient-to-r from-emerald-200 via-emerald-400 to-amber-400 bg-clip-text text-transparent">
+                  SABAA QUANT
                 </span>
-                <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                  INSTITUTIONAL TERMINAL
+                <span className="px-2 py-0.5 text-[9px] font-bold rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  REAL LIVE TERMINAL
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">{t('appSubtitle', 'Institutional algorithmic engine, computer vision analysis, multi-strategy confluence, and risk management')}</p>
+              <p className="text-[11px] text-slate-400">{t('appSubtitle', 'Institutional algorithmic quantitative engine, multi-strategy confluence, and risk management')}</p>
             </div>
           </div>
 
           <div className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-300">
-            <a href="#features" className="hover:text-amber-400 transition-colors">{t('nav.strategies', 'Strategies')}</a>
-            <a href="#vision-section" className="hover:text-amber-400 transition-colors">{t('nav.vision', 'Vision AI')}</a>
-            <a href="#smc-section" className="hover:text-amber-400 transition-colors">{tTerm('SMC Liquidity')}</a>
-            <a href="#faq" className="hover:text-amber-400 transition-colors">FAQ</a>
+            <a href="#features" className="hover:text-emerald-400 transition-colors">{t('nav.strategies', 'Strategies')}</a>
+            <a href="#smc-section" className="hover:text-emerald-400 transition-colors">{tTerm('SMC Liquidity')}</a>
+            <a href="#faq" className="hover:text-emerald-400 transition-colors">FAQ</a>
           </div>
 
           <div className="flex items-center gap-2.5">
@@ -238,17 +213,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {/* Hero Pitch & CTAs */}
             <div className={`lg:col-span-7 space-y-6 ${isRTL ? 'text-right' : 'text-left'}`}>
               {/* Trust Badge */}
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/90 border border-amber-500/30 text-xs text-slate-300 shadow-sm">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded bg-slate-900/90 border border-emerald-500/30 text-xs text-slate-300 shadow-sm">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="font-semibold text-amber-300">{tDynamic('Autonomous Quantitative Market Analysis Engine')}</span>
+                <span className="font-semibold text-emerald-300">{isRTL ? 'محرك تحليل كمي خوارزمي مستقل' : 'Autonomous Quantitative Market Analysis Engine'}</span>
                 <span className="text-slate-500">|</span>
-                <span className="text-slate-400">{tDynamic('Cloud-Secured & Verified • 100% Manual Execution')}</span>
+                <span className="text-slate-400">{isRTL ? 'ربط مباشر مع الحساب الحقيقي 100%' : 'Direct Real Account Connectivity'}</span>
               </div>
 
               <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-[1.25] text-slate-100">
                 {t('landing.heroTitle', 'INSTITUTIONAL QUANTITATIVE SIGNAL ENGINE')} <br className="hidden sm:inline" />
-                <span className="bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 bg-clip-text text-transparent">
-                  {tTerm('SMC Liquidity')} & {t('nav.vision', 'Vision AI')}
+                <span className="bg-gradient-to-r from-emerald-300 via-emerald-400 to-amber-400 bg-clip-text text-transparent">
+                  {tTerm('SMC Liquidity')} &amp; {isRTL ? 'التوافق الخوارزمي' : 'Algorithmic Confluence'}
                 </span>
               </h1>
 
@@ -260,18 +235,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <button
                   onClick={handleTerminalGuard}
-                  className="flex items-center gap-2.5 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-xl shadow-amber-500/25 transition-all transform hover:-translate-y-0.5 cursor-pointer"
+                  className="flex items-center gap-2.5 px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-amber-500 hover:from-emerald-400 hover:to-amber-400 text-slate-950 font-black text-xs shadow-xl shadow-emerald-500/20 transition-all transform hover:-translate-y-0.5 cursor-pointer"
                 >
                   <Terminal className="w-4 h-4" />
                   <span>{t('landing.connectTerminal', 'Open Trading Terminal')}</span>
                 </button>
 
                 <button
-                  onClick={onOpenVision}
-                  className="flex items-center gap-2 px-5 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 hover:border-amber-500/50 text-xs font-bold shadow-sm transition-all cursor-pointer"
+                  onClick={handleScanner}
+                  className="flex items-center gap-2 px-5 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 hover:border-emerald-500/50 text-xs font-bold shadow-sm transition-all cursor-pointer"
                 >
-                  <Eye className="w-4 h-4 text-amber-400" />
-                  <span>{t('nav.vision', 'Vision AI Analysis')}</span>
+                  <Globe className="w-4 h-4 text-emerald-400" />
+                  <span>{t('nav.scanner', 'Market Scanner')}</span>
                 </button>
 
                 {onOpenAndroidInstall && (
@@ -410,24 +385,24 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       {/* 6 Institutional Pillars Section */}
       <section id="features" className="py-16 px-4 lg:px-8 max-w-7xl mx-auto">
         <div className="text-center space-y-3 mb-12">
-          <div className="text-xs font-bold uppercase tracking-wider text-amber-400">المعمارية المؤسسية</div>
+          <div className="text-xs font-bold uppercase tracking-wider text-emerald-400">المعمارية المؤسسية</div>
           <h2 className="text-2xl sm:text-4xl font-black text-slate-100">
             6 محركات تحليلية مدمجة في منصة واحدة
           </h2>
           <p className="text-sm text-slate-400 max-w-2xl mx-auto">
-            بنيت منصة SABAA AI لتمنح المتداول الفردي نفس أدوات غرف التداول الاستثمارية والبنوك.
+            بُنيت منصة SABAA QUANT لتمنح المتداول أدوات التحليل الرياضي الصارم وإدارة المخاطر المؤسسية.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Card 1 */}
-          <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-amber-500/40 transition-all space-y-4">
-            <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center">
-              <Eye className="w-6 h-6" />
+          <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-emerald-500/40 transition-all space-y-4">
+            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center">
+              <Zap className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-bold text-slate-100">الرؤية الحاسوبية للشارتات (Chart Vision)</h3>
+            <h3 className="text-base font-bold text-slate-100">26 استراتيجية خوارزمية دقيقة</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              ارفع أي لقطة شاشة لشارت التداول من أي منصة، وسيقوم نموذج Gemini 3.8 Flash بقراءتها بصرياً لتحديد النماذج والدعوم والكسور الهيكلية فوراً.
+              تقييم لحظي لمحركات الاتجاه، الزخم، بولينجر، فيبوناتشي، إليوت، جان، وشموع الانعكاس بناءً على الشموع المغلقة الفعلية دون إعادة رسم.
             </p>
           </div>
 
@@ -492,9 +467,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section className="py-16 px-4 lg:px-8 max-w-5xl mx-auto border-t border-slate-900">
         <div className="text-center space-y-3 mb-10">
           <h2 className="text-2xl sm:text-3xl font-black text-slate-100">
-            لماذا تختلف SABAA AI عن البوتات التقليدية؟
+            لماذا تختلف SABAA QUANT عن البوتات التقليدية؟
           </h2>
-          <p className="text-xs text-slate-400">مقارنة معمارية مع أنظمة التسويق الوهمية والخيارات الثنائية</p>
+          <p className="text-xs text-slate-400">مقارنة معمارية مع الأنظمة العشوائية وغير المنضبطة</p>
         </div>
 
         <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/50">
@@ -502,35 +477,35 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <thead>
               <tr className="border-b border-slate-800 bg-slate-950 text-slate-400">
                 <th className="py-3 px-4 font-semibold">المعيار التقني</th>
-                <th className="py-3 px-4 font-bold text-amber-400">منصة SABAA AI SOLUTION</th>
-                <th className="py-3 px-4 font-normal text-slate-500">البوتات التلقائية المروجة</th>
+                <th className="py-3 px-4 font-bold text-emerald-400">منصة SABAA QUANT</th>
+                <th className="py-3 px-4 font-normal text-slate-500">البوتات العشوائية المروجة</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
               <tr>
-                <td className="py-3.5 px-4 font-semibold text-slate-300">طريقة التنفيذ</td>
-                <td className="py-3.5 px-4 text-emerald-400 font-bold">يدوي حصري بموافقة ومراجعة المتداول</td>
-                <td className="py-3.5 px-4 text-rose-400">تنفيذ تلقائي خطير ومقامرة برأس المال</td>
+                <td className="py-3.5 px-4 font-semibold text-slate-300">انضباط الدخول</td>
+                <td className="py-3.5 px-4 text-emerald-400 font-bold">دخول صارم عند تأهل الإشارة الكميّة غير المعاد رسمها</td>
+                <td className="py-3.5 px-4 text-rose-400">دخول عشوائي ومقامرة برأس المال</td>
               </tr>
               <tr>
-                <td className="py-3.5 px-4 font-semibold text-slate-300">الرؤية الحاسوبية للشارتات</td>
-                <td className="py-3.5 px-4 text-emerald-400 font-bold">مدعومة بالكامل بنموذج Gemini 3.8 Multimodal</td>
-                <td className="py-3.5 px-4 text-slate-500">غير متوفرة نهائياً</td>
+                <td className="py-3.5 px-4 font-semibold text-slate-300">محرك التوافق والشموع</td>
+                <td className="py-3.5 px-4 text-emerald-400 font-bold">26 وحدة خوارزمية + مصفوفة SBAA 100 نقطة</td>
+                <td className="py-3.5 px-4 text-slate-500">مؤشر واحد سطحي أو وهمي</td>
               </tr>
               <tr>
-                <td className="py-3.5 px-4 font-semibold text-slate-300">مصطلحات التداول</td>
-                <td className="py-3.5 px-4 text-emerald-400 font-bold">مصطلحات أسواق عالمية (BUY / SELL / SL / TP)</td>
-                <td className="py-3.5 px-4 text-slate-500">مصطلحات خيارات ثنائية مضللة (PUT / CALL)</td>
+                <td className="py-3.5 px-4 font-semibold text-slate-300">فحص ما قبل التنفيذ</td>
+                <td className="py-3.5 px-4 text-emerald-400 font-bold">التحقق من 15 شمعة حقيقية والرصيد والمصادقة قبل أي أمر</td>
+                <td className="py-3.5 px-4 text-slate-500">أوامر عشوائية بدون تدقيق</td>
               </tr>
               <tr>
                 <td className="py-3.5 px-4 font-semibold text-slate-300">إدارة المخاطر</td>
-                <td className="py-3.5 px-4 text-emerald-400 font-bold">حاسبة حجم العقد الصارمة وإيقاف التداول عند الخسارة</td>
-                <td className="py-3.5 px-4 text-rose-400">مضاعفات خطيرة (Martingale) تحرق الحساب</td>
+                <td className="py-3.5 px-4 text-emerald-400 font-bold">قاطع الدائرة لحد الخسارة والربح ومنع تكرار الصفقات</td>
+                <td className="py-3.5 px-4 text-rose-400">مضاعفات غير منضبطة تحرق الحساب</td>
               </tr>
               <tr>
                 <td className="py-3.5 px-4 font-semibold text-slate-300">شفافية الإحصائيات</td>
                 <td className="py-3.5 px-4 text-emerald-400 font-bold">سجل مدقق بالأسعار المرجعية اللحظية الحقيقية</td>
-                <td className="py-3.5 px-4 text-rose-400">أرقام ونسب فوز زائفة 99% تسويقية</td>
+                <td className="py-3.5 px-4 text-rose-400">أرقام ونسب فوز زائفة تسويقية</td>
               </tr>
             </tbody>
           </table>
@@ -543,35 +518,28 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <h2 className="text-2xl sm:text-3xl font-black text-slate-100">
             الأسئلة الشائعة حول المنصة
           </h2>
-          <p className="text-xs text-slate-400">كل ما تحتاج لمعرفته حول طريقة عمل منظومة SABAA AI</p>
+          <p className="text-xs text-slate-400">كل ما تحتاج لمعرفته حول طريقة عمل منظومة SABAA QUANT</p>
         </div>
 
         <div className="space-y-3 text-right">
           <div className="p-5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
-            <h3 className="text-sm font-bold text-amber-300">هل يوجد تداول آلي ينفذ الصفقات تلقائياً؟</h3>
+            <h3 className="text-sm font-bold text-emerald-300">كيف يعمل التداول الآلي الخوارزمي؟</h3>
             <p className="text-xs text-slate-300 leading-relaxed">
-              <strong>قطعياً لا.</strong> منصة SABAA AI SOLUTION مبنية على الفلسفة المؤسسية لحماية المتداول من مخاطر التنفيذ غير المحسوب. كل إشارة أو فرصة تتطلب مراجعة بشرية واعية وتأكيداً يدوياً صريحاً من خلال بطاقة تنفيذ الصفقات.
+              يعتمد التداول الآلي على مصفوفة التحليل الكمي الصارمة؛ حيث لا يُسمح بأي أمر تداول إلا عند تحقق الإشارة الاتجاهية المؤهلة غير المعاد رسمها، وبعد فحص اتصال الوسيط وتوفر 15 شمعة حقيقية وتوفر الرصيد في الحساب الحقيقي.
             </p>
           </div>
 
           <div className="p-5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
-            <h3 className="text-sm font-bold text-amber-300">كيف تعمل الرؤية الحاسوبية للشارتات؟</h3>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              تقوم بتحميل صورة أو لقطة شاشة لأي شارت تريده، فيقوم محرك الرؤية الحاسوبية بفحص هندسة الشموع، خطوط الاتجاه، ومناطق كتل الأوامر غير المغطاة، ويقدم لك تقريراً تفصيلياً مع إعداد مقترح لوقف الخسارة والهدف.
-            </p>
-          </div>
-
-          <div className="p-5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
-            <h3 className="text-sm font-bold text-amber-300">ما هي استراتيجيات SMC و ICT المدعومة؟</h3>
+            <h3 className="text-sm font-bold text-emerald-300">ما هي استراتيجيات SMC و ICT المدعومة؟</h3>
             <p className="text-xs text-slate-300 leading-relaxed">
               المنصة ترصد مفاهيم الأموال الذكية: مناطق تجميع السيولة (Liquidity Sweeps)، فجوات القيمة العادلة (Fair Value Gaps)، كسر الهيكل (BOS)، والتغير في السلوك (CHoCH)، وتدمجها مع مؤشرات الزخم المعتمدة.
             </p>
           </div>
 
           <div className="p-5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
-            <h3 className="text-sm font-bold text-amber-300">هل البيانات المعروضة في الشارت حقيقية؟</h3>
+            <h3 className="text-sm font-bold text-emerald-300">هل البيانات المعروضة في الشارت والصفقات حقيقية؟</h3>
             <p className="text-xs text-slate-300 leading-relaxed">
-              نعم، المنصة تتصل ببث حي للأسعار عبر بروتوكولات WebSocket وتعمل بنظام mark-to-market لحظي لتدقيق النتائج والأسعار دون أي بيانات وهمية.
+              نعم، المنصة تتصل ببث حي للأسعار عبر بروتوكولات WebSocket وتنفذ الأوامر حصرياً على جلسة الحساب الحقيقي الموثقة دون أي محاكاة أو بيانات وهمية.
             </p>
           </div>
         </div>
@@ -580,15 +548,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       {/* Call To Action Banner */}
       <section className="py-16 px-4 lg:px-8 border-t border-slate-900 bg-gradient-to-b from-transparent to-slate-900/60 text-center space-y-6">
         <h2 className="text-2xl sm:text-4xl font-black text-slate-100">
-          جاهز لتجربة التحليل المؤسسي المتطور؟
+          جاهز لتجربة التداول الخوارزمي المنضبط؟
         </h2>
         <p className="text-xs sm:text-sm text-slate-400 max-w-xl mx-auto">
-          ابدأ الآن بفحص الشارت بالرؤية الحاسوبية أو استكشف شاشات التداول المباشرة ومصفوفة التوافق.
+          اربط جلسة حسابك الحقيقي واستكشف شاشات التحليل المباشرة ومصفوفة الاستراتيجيات الـ 26.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3">
           <button
             onClick={onEnterTerminal}
-            className="px-6 py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-black text-sm shadow-xl shadow-amber-500/20 cursor-pointer"
+            className="px-6 py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-amber-500 hover:from-emerald-400 hover:to-amber-400 text-slate-950 font-black text-sm shadow-xl shadow-emerald-500/20 cursor-pointer"
           >
             دخول منصة التداول والتحليل المباشر &larr;
           </button>
@@ -600,15 +568,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div className="max-w-7xl mx-auto space-y-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-b border-slate-800/60 pb-6">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center text-slate-950 font-bold">
-                S
-              </div>
-              <span className="font-bold text-slate-200">SABAA AI SOLUTION</span>
+              <BrandLogo size="sm" />
+              <span className="font-bold text-slate-200">SABAA QUANT</span>
             </div>
             <div className="flex items-center gap-6 text-[11px]">
               <span>منظومة تحليل الأسواق المالية</span>
               <span>•</span>
-              <span>محرك الرؤية الحاسوبية Gemini 3.8</span>
+              <span>26 وحدة خوارزمية دقيقة</span>
               <span>•</span>
               <span>إدارة مخاطر مؤسسية</span>
             </div>
@@ -620,14 +586,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <span>تحذير المخاطر وإخلاء المسؤولية القانونية:</span>
             </div>
             <p>
-              التداول في الأسواق المالية (الفوركس، العملات الرقمية، الأسهم، والعقود مقابل الفروقات) ينطوي على درجة عالية من المخاطرة وقد لا يكون مناسباً لجميع المستثمرين.
-              إن إشارات وبيانات وتحليلات الرؤية الحاسوبية والذكاء الاصطناعي المقدمة عبر منصة SABAA AI SOLUTION هي لأغراض تعليمية وتحليلية مساعدة فقط، ولا تشكل أي نصيحة مالية أو استثمارية أو دعوة لشراء أو بيع أي أصل مالي.
-              المستخدم وحده هو المسؤول قانونياً ومالياً عن جميع القرارات والصفقات التي ينفذها يدوياً على مسؤوليته الشخصية.
+              التداول في الأسواق المالية ينطوي على درجة عالية من المخاطرة وقد لا يكون مناسباً لجميع المستثمرين.
+              إن إشارات وبيانات منصة SABAA QUANT مبنية على خوارزميات كمية لأغراض تحليلية مساعدة، والمستخدم وحده هو المسؤول قانونياً ومالياً عن جميع القرارات والصفقات المنفذة على حسابه الحقيقي.
             </p>
           </div>
 
           <div className="text-center text-[10px] text-slate-400">
-            جميع الحقوق محفوظة © {new Date().getFullYear()} SABAA AI SOLUTION. نظام التحليل الفني والرؤية الحاسوبية المؤسسية.
+            جميع الحقوق محفوظة © {new Date().getFullYear()} SABAA QUANT. منظومة التحليل الكمي والتداول الخوارزمي.
           </div>
         </div>
       </footer>

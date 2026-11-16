@@ -23,17 +23,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   currentEndpoint = 'wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket',
   currentSession = '',
   currentUid = '',
-  isDemo = true,
+  isDemo = false,
   strategySettings,
   diagnostics,
   onDisconnect,
 }) => {
-  const { isRTL, t } = useLanguage();
+  const { isRTL } = useLanguage();
   const [activeTab, setActiveTab] = useState<'connection' | 'audio' | 'risk'>('connection');
-  const [endpoint, setEndpoint] = useState(currentEndpoint);
+  const [endpoint, setEndpoint] = useState(
+    currentEndpoint && !currentEndpoint.includes('demo-api-')
+      ? currentEndpoint
+      : 'wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket'
+  );
   const [session, setSession] = useState(currentSession);
   const [uid, setUid] = useState(String(currentUid || ''));
-  const [demoMode, setDemoMode] = useState(isDemo);
+  const demoMode = false;
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [testingConn, setTestingConn] = useState(false);
@@ -45,12 +49,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     accountMode?: string;
   } | null>(null);
 
+  const detectedMode = useMemo(() => {
+    if (/(?:^|[;&,\s"{])isDemo"?\s*[:=]\s*"?0"?/i.test(session) || /(?:^|[;&,\s"{])is_demo"?\s*[:=]\s*"?0"?/i.test(session)) {
+      return 'REAL';
+    } else if (/(?:^|[;&,\s"{])isDemo"?\s*[:=]\s*"?1"?/i.test(session) || /(?:^|[;&,\s"{])is_demo"?\s*[:=]\s*"?1"?/i.test(session)) {
+      return 'DEMO';
+    }
+    return null;
+  }, [session]);
+
   const handleTestConnection = async () => {
     if (!session || !session.trim()) return;
+    if (detectedMode === 'DEMO') {
+      setTestResult({
+        success: false,
+        state: 'DEMO_DISABLED',
+        error: isRTL ? 'تم إيقاف الحساب التجريبي (isDemo=1). يرجى إدخال جلسة الحساب الحقيقي فقط (isDemo=0).' : 'Demo accounts are disabled. Please provide a REAL session token (isDemo=0).',
+      });
+      return;
+    }
     setTestingConn(true);
     setTestResult(null);
     try {
-      const effectiveEndpoint = endpoint?.trim() || 'wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket';
+      const effectiveEndpoint =
+        endpoint?.trim() && !endpoint.includes('demo-api-')
+          ? endpoint.trim()
+          : 'wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket';
       const res = await fetch('/api/account/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -58,8 +82,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           sessionToken: session,
           endpoint: effectiveEndpoint,
           uid,
-          isDemo: demoMode,
-          mode: demoMode ? 'DEMO' : 'REAL',
+          isDemo: false,
+          mode: 'REAL',
           timeoutMs: 10000,
         }),
       });
@@ -79,7 +103,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         state: data.state || (data.success ? 'CONNECTED' : 'FAILED'),
         error: data.error || (data.diagnostics?.authError) || (data.diagnostics?.error),
         balance: data.balance ?? data.account?.balance,
-        accountMode: data.accountMode || (demoMode ? 'DEMO' : 'REAL'),
+        accountMode: data.accountMode || 'REAL',
       });
     } catch (err: any) {
       setTestResult({
@@ -92,15 +116,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  const detectedMode = useMemo(() => {
-    if (/(?:^|[;&,\s"{])isDemo"?\s*[:=]\s*"?0"?/i.test(session) || /(?:^|[;&,\s"{])is_demo"?\s*[:=]\s*"?0"?/i.test(session)) {
-      return 'REAL';
-    } else if (/(?:^|[;&,\s"{])isDemo"?\s*[:=]\s*"?1"?/i.test(session) || /(?:^|[;&,\s"{])is_demo"?\s*[:=]\s*"?1"?/i.test(session)) {
-      return 'DEMO';
-    }
-    return null;
-  }, [session]);
-
   const handleSessionChange = (val: string) => {
     setSession(val);
     const uidMatch =
@@ -109,25 +124,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (uidMatch && uidMatch[1] && Number(uidMatch[1]) > 0) {
       setUid(uidMatch[1]);
     }
-    const isDemoMatch = val.match(/"?(?:isDemo|is_demo)"?\s*[:=]\s*"?([01]|true|false)"?/i);
-    if (isDemoMatch) {
-      const isDemoVal = isDemoMatch[1] === '1' || isDemoMatch[1].toLowerCase() === 'true';
-      setDemoMode(isDemoVal);
-    }
   };
 
   if (!isOpen) return null;
 
   const handleSave = () => {
+    if (detectedMode === 'DEMO') {
+      setTestResult({
+        success: false,
+        state: 'DEMO_DISABLED',
+        error: isRTL ? 'تم إيقاف الحساب التجريبي (isDemo=1). يرجى إدخال جلسة الحساب الحقيقي فقط.' : 'Demo accounts are disabled. Please provide a REAL session token.',
+      });
+      return;
+    }
     if (onSave) {
       if (onSave.length >= 3) {
-        (onSave as any)(endpoint, session, demoMode, strategySettings || ({} as any), uid);
+        (onSave as any)(endpoint, session, false, strategySettings || ({} as any), uid);
       } else {
         (onSave as any)({
           endpoint,
           session,
           uid,
-          isDemo: demoMode,
+          isDemo: false,
           audioEnabled,
         });
       }
@@ -203,44 +221,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="p-5 overflow-y-auto space-y-4 flex-1">
           {activeTab === 'connection' && (
             <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  {isRTL ? 'نوع الحساب النشط' : 'Active Account Mode'}
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDemoMode(true);
-                      if (!endpoint || endpoint.includes('demo-api-')) {
-                        setEndpoint('wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket');
-                      }
-                    }}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
-                      demoMode
-                        ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 shadow-sm shadow-amber-500/20'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
-                    }`}
-                  >
-                    <span>{isRTL ? 'تجريبي (DEMO)' : 'DEMO Account'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDemoMode(false);
-                      if (!endpoint || endpoint.includes('demo-api-')) {
-                        setEndpoint('wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket');
-                      }
-                    }}
-                    className={`py-2.5 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
-                      !demoMode
-                        ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300 shadow-sm shadow-emerald-500/20'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
-                    }`}
-                  >
-                    <span>{isRTL ? 'حقيقي (REAL)' : 'REAL Account'}</span>
-                  </button>
-                </div>
+              <div className="p-3 rounded-xl border bg-emerald-500/15 border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center justify-between">
+                <span>{isRTL ? 'نوع الحساب النشط: حقيقي مباشر (REAL LIVE فقط)' : 'Active Account Mode: REAL LIVE Only'}</span>
+                <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/30">isDemo = 0</span>
               </div>
 
               <div>
@@ -249,7 +232,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     {isRTL ? 'نقطة نهاية الـ WebSocket (خادم الاتصال)' : 'WebSocket Endpoint'}
                   </label>
                   <span className="text-[10px] text-amber-400 font-mono">
-                    {endpoint.includes('api-eu') ? 'api-eu (الموصى به)' : endpoint.includes('api-us') ? 'api-us' : endpoint.includes('api-sc') ? 'api-sc' : 'demo-api'}
+                    {endpoint.includes('api-eu') ? 'api-eu (الموصى به)' : endpoint.includes('api-us') ? 'api-us' : 'api-sc'}
                   </span>
                 </div>
                 <input
@@ -294,17 +277,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   >
                     api-sc (سيشيل)
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setEndpoint('wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket')}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-mono border transition-all cursor-pointer ${
-                      endpoint.includes('demo-api-eu.po.market')
-                        ? 'bg-sky-500/20 text-sky-300 border-sky-500/50 font-bold'
-                        : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:border-slate-700'
-                    }`}
-                  >
-                    demo-api (ضيوف)
-                  </button>
                 </div>
               </div>
 
@@ -330,11 +302,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold border ${
                       detectedMode === 'REAL'
                         ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                        : 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                        : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
                     }`}>
                       {detectedMode === 'REAL'
-                        ? (isRTL ? '🟢 تم اكتشافه: حساب حقيقي' : '🟢 Detected: REAL')
-                        : (isRTL ? '🔵 تم اكتشافه: حساب تجريبي' : '🔵 Detected: DEMO')}
+                        ? (isRTL ? 'تم اكتشافه: حساب حقيقي' : 'Detected: REAL')
+                        : (isRTL ? 'مرفوض: حساب تجريبي (isDemo=1)' : 'Rejected: DEMO (isDemo=1)')}
                     </span>
                   )}
                 </div>

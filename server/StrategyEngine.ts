@@ -726,12 +726,7 @@ export class StrategyEngine {
 
     let activeStrategies: StrategyResult[] = [];
     if (!isMultiMode && selectedStratId) {
-      const normalizedTarget = selectedStratId.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const focused = strategyResults.find((s) => {
-        const normId = s.strategyId.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const normName = s.strategyName.toLowerCase().replace(/[^a-z0-9]/g, '');
-        return normId === normalizedTarget || normName === normalizedTarget || normId.includes(normalizedTarget) || normalizedTarget.includes(normId);
-      });
+      const focused = StrategyEngine.matchStrategyById(strategyResults, selectedStratId);
       if (focused && focused.dataValid) {
         focusedStrategy = focused;
         isSingleStrategy = true;
@@ -995,14 +990,16 @@ export class StrategyEngine {
         failedConditions.push(`Strategy requires strict bullish candle confirmation, but trigger candle is ${candleDirection}`);
       }
 
-      // Indicator conflict check for UP
-      if (indicators.macd && indicators.macd.histogram !== null && indicators.macd.histogram < -0.0003 && indicators.macd.macd < indicators.macd.signal) {
+      // Indicator conflict check for UP (proportional to asset price scale)
+      const macdConflictThreshold = Math.max(1e-7, currentPrice * 0.00025);
+      const emaSpreadThreshold = Math.max(1e-7, currentPrice * 0.00018);
+      if (indicators.macd && indicators.macd.histogram !== null && indicators.macd.histogram < -macdConflictThreshold && indicators.macd.macd < indicators.macd.signal) {
         conflictingConditions.push('MACD histogram negative and expanding downward');
       }
       if (indicators.rsi !== null && indicators.rsi < 35) {
         conflictingConditions.push(`RSI (${indicators.rsi.toFixed(1)}) indicates strong bearish momentum`);
       }
-      if (indicators.ema9 !== null && indicators.ema21 !== null && indicators.ema9 < indicators.ema21 - 0.0002) {
+      if (indicators.ema9 !== null && indicators.ema21 !== null && indicators.ema9 < indicators.ema21 - emaSpreadThreshold) {
         conflictingConditions.push('EMA9 is below EMA21 in bearish alignment');
       }
     } else if (proposedDirection === 'DOWN') {
@@ -1030,14 +1027,16 @@ export class StrategyEngine {
         failedConditions.push(`Strategy requires strict bearish candle confirmation, but trigger candle is ${candleDirection}`);
       }
 
-      // Indicator conflict check for DOWN
-      if (indicators.macd && indicators.macd.histogram !== null && indicators.macd.histogram > 0.0003 && indicators.macd.macd > indicators.macd.signal) {
+      // Indicator conflict check for DOWN (proportional to asset price scale)
+      const macdConflictThreshold = Math.max(1e-7, currentPrice * 0.00025);
+      const emaSpreadThreshold = Math.max(1e-7, currentPrice * 0.00018);
+      if (indicators.macd && indicators.macd.histogram !== null && indicators.macd.histogram > macdConflictThreshold && indicators.macd.macd > indicators.macd.signal) {
         conflictingConditions.push('MACD histogram positive and expanding upward');
       }
       if (indicators.rsi !== null && indicators.rsi > 65) {
         conflictingConditions.push(`RSI (${indicators.rsi.toFixed(1)}) indicates strong bullish momentum`);
       }
-      if (indicators.ema9 !== null && indicators.ema21 !== null && indicators.ema9 > indicators.ema21 + 0.0002) {
+      if (indicators.ema9 !== null && indicators.ema21 !== null && indicators.ema9 > indicators.ema21 + emaSpreadThreshold) {
         conflictingConditions.push('EMA9 is above EMA21 in bullish alignment');
       }
     }
@@ -1064,8 +1063,10 @@ export class StrategyEngine {
     const selectedThreshold = this.settings.selectedThreshold ?? this.settings.global.selectedThreshold ?? 80;
     const analysisMode: AnalysisMode = this.settings.global.analysisMode || (this.settings.global.requireClosedCandle !== false ? 'CLOSED_CANDLE' : 'INTRABAR');
 
+    const configuredCooldown = this.settings.global.signalCooldownSeconds || 30;
+    const effectiveCooldownSec = Math.min(configuredCooldown, Math.max(3, Math.floor((timeframe || 60) * 0.4)));
     const cooldownRemainingSec = this.lastActiveSignalTimestamp
-      ? Math.max(0, Math.ceil(((this.settings.global.signalCooldownSeconds || 30) * 1000 - (now - this.lastActiveSignalTimestamp)) / 1000))
+      ? Math.max(0, Math.ceil((effectiveCooldownSec * 1000 - (now - this.lastActiveSignalTimestamp)) / 1000))
       : 0;
 
     const signalKey = `${asset}_${timeframe}_${lastCandleTime}`;
@@ -1190,7 +1191,7 @@ export class StrategyEngine {
 
     // Dynamic Smart Expiry Duration (Optimized for Pocket Option binary options)
     const atrVal = typeof indicatorSnapshot?.atr === 'number' ? indicatorSnapshot.atr : 0;
-    const isHighVolatility = regime === 'HIGH_VOLATILITY' || atrVal > 0.0008;
+    const isHighVolatility = regime === 'HIGH_VOLATILITY' || atrVal > currentPrice * 0.00075;
     const expiryCandles = isHighVolatility ? 1 : proposedVotes >= 4 ? 2 : 1;
     const expirySec = timeframe * expiryCandles;
     const expiresAt = now + (expirySec * 1000);
@@ -1954,6 +1955,14 @@ export class StrategyEngine {
     currentPrice: number,
     context?: StrategyContext
   ): StrategyResult {
+    return StrategyEngine.enrichResult(res, currentPrice, context);
+  }
+
+  public static enrichResult(
+    res: StrategyResult,
+    currentPrice: number,
+    context?: StrategyContext
+  ): StrategyResult {
     const calcTimestamp = Date.now();
 
     if (!res.dataValid) {
@@ -2135,5 +2144,98 @@ export class StrategyEngine {
       calculationTimestamp: calcTimestamp,
       dataFreshness: context?.dataFreshness,
     };
+  }
+
+  public static matchStrategyById(strategies: StrategyResult[], targetId: string): StrategyResult | undefined {
+    if (!targetId || !Array.isArray(strategies) || strategies.length === 0) return undefined;
+    const rawTarget = targetId.trim().toLowerCase();
+    const normTarget = rawTarget.replace(/[^a-z0-9]/g, '');
+
+    const aliasMap: Record<string, string> = {
+      smc: 'market_structure',
+      smartmoney: 'market_structure',
+      bollingerbands: 'bollinger_bounce',
+      bollinger: 'bollinger_bounce',
+      ematrend: 'ema_trend',
+      cci: 'cci_strategy',
+      ichimoku: 'ichimoku_cloud',
+      candlestick: 'candlestick_pattern',
+      rsi: 'rsi_momentum',
+    };
+    const aliasedId = aliasMap[normTarget];
+
+    // Pass 1: exact raw ID or exact aliased ID
+    const exactIdMatch = strategies.find((s) => {
+      const idLower = (s.strategyId || '').toLowerCase();
+      return idLower === rawTarget || (aliasedId && idLower === aliasedId);
+    });
+    if (exactIdMatch) return exactIdMatch;
+
+    // Pass 2: exact normalized ID or name
+    const exactNormMatch = strategies.find((s) => {
+      const normId = (s.strategyId || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const normName = (s.strategyName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      return normId === normTarget || normName === normTarget;
+    });
+    if (exactNormMatch) return exactNormMatch;
+
+    // Pass 3: substring fallback only if no exact match
+    return strategies.find((s) => {
+      const normId = (s.strategyId || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const normName = (s.strategyName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      return normId.includes(normTarget) || normTarget.includes(normId) || normName.includes(normTarget);
+    });
+  }
+
+  /**
+   * Evaluates all 26 quantitative strategy modules on a given chronological candle slice.
+   * Used by AutoTraderEngine.runBacktest so historical simulation uses genuine live math without divergence.
+   */
+  public evaluateStrategiesOnCandles(candles: Candle[], asset: string = 'ASSET', timeframe: number = 60): StrategyResult[] {
+    if (!candles || candles.length === 0) return [];
+    const lastCandle = candles[candles.length - 1];
+    const prevCandle = candles.length > 1 ? candles[candles.length - 2] : null;
+    const context: StrategyContext = {
+      symbol: asset,
+      timeframe,
+      candles,
+      currentCandle: lastCandle,
+      previousCandle: prevCandle,
+      lastTickTimestamp: (lastCandle.time || 0) * 1000,
+      lastCandleTimestamp: lastCandle.time || 0,
+      dataFreshness: 0,
+      currentPrice: lastCandle.close,
+    };
+
+    const rawResults: StrategyResult[] = [
+      EmaTrendStrategy.evaluate(candles, this.settings.emaTrend),
+      RsiMomentumStrategy.evaluate(candles, this.settings.rsiMomentum),
+      MacdStrategy.evaluate(candles, this.settings.macd),
+      BollingerBounceStrategy.evaluate(candles, this.settings.bollingerBounce),
+      CandlestickPatternStrategy.evaluate(candles, this.settings.candlestick),
+      SupportResistanceStrategy.evaluate(candles, this.settings.supportResistance),
+      BreakoutStrategy.evaluate(candles, this.settings.breakout),
+      MarketStructureStrategy.evaluate(candles, this.settings.marketStructure),
+      MultiConfluenceStrategy.evaluate(candles, this.settings.multiConfluence),
+      SmaCrossoverStrategy.evaluate(candles, (this.settings as any).smaCrossover),
+      MaAlignmentStrategy.evaluate(candles, (this.settings as any).maAlignment),
+      RsiReversalStrategy.evaluate(candles, (this.settings as any).rsiReversal),
+      StochasticStrategy.evaluate(candles, (this.settings as any).stochastic),
+      CciStrategy.evaluate(candles, (this.settings as any).cci),
+      AdxTrendStrategy.evaluate(candles, (this.settings as any).adxTrend),
+      ParabolicSarStrategy.evaluate(candles, (this.settings as any).parabolicSar),
+      IchimokuStrategy.evaluate(candles, (this.settings as any).ichimoku),
+      PivotPointStrategy.evaluate(candles, (this.settings as any).pivotPoint),
+      FibonacciRetracementStrategy.evaluate(candles, (this.settings as any).fibonacci),
+      PriceActionStrategy.evaluate(candles, (this.settings as any).priceAction),
+      AtrVolatilityStrategy.evaluate(candles, (this.settings as any).atrVolatility),
+      SuperTrendStrategy.evaluate(candles, (this.settings as any).superTrend),
+      VolumeFlowStrategy.evaluate(candles, (this.settings as any).volumeFlow),
+      GannPriceTimeStrategy.evaluate(candles, this.settings.gannPriceTime),
+      ElliottWaveStrategy.evaluate(candles, this.settings.elliottWave),
+      DarvasBoxStrategy.evaluate(candles, this.settings.darvasBox),
+    ];
+
+    return rawResults.map((s) => this.enrichStrategyResult(s, lastCandle.close, context));
   }
 }

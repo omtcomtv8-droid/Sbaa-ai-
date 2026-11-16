@@ -76,15 +76,15 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
   onClearHighlight,
 }) => {
   const { t, tTerm, tDynamic, isRTL } = useLanguage();
-  // 1. Local state for form
-  const [mode, setMode] = useState<'DEMO' | 'REAL'>(configuredIsDemo ? 'DEMO' : 'REAL');
+  // 1. Local state for form (Locked to REAL Live Account only)
+  const mode: 'REAL' = 'REAL';
   const [sessionToken, setSessionToken] = useState<string>(configuredSession || '');
   const [uid, setUid] = useState<string>(
     configuredUid ? String(configuredUid) : diagnostics?.account.uid ? String(diagnostics.account.uid) : ''
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [targetEndpoint, setTargetEndpoint] = useState<string>(
-    diagnostics?.endpoint && diagnostics.endpoint.startsWith('wss://')
+    diagnostics?.endpoint && diagnostics.endpoint.startsWith('wss://') && !diagnostics.endpoint.includes('demo-api-')
       ? diagnostics.endpoint
       : 'wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket'
   );
@@ -108,20 +108,16 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
   });
 
   const cardRef = useRef<HTMLDivElement>(null);
-  const userModeExplicitRef = useRef<boolean>(false);
 
-  // Sync state if external props change without overriding manual mode selection
+  // Sync state if external props change
   useEffect(() => {
     if (configuredSession && !sessionToken) {
       setSessionToken(configuredSession);
     }
-    if (configuredIsDemo !== undefined && !userModeExplicitRef.current) {
-      setMode(configuredIsDemo ? 'DEMO' : 'REAL');
-    }
     if (configuredUid && !uid) {
       setUid(String(configuredUid));
     }
-  }, [configuredSession, configuredIsDemo, configuredUid]);
+  }, [configuredSession, configuredUid]);
 
   // Subscribe to authoritative stores
   const [poSession, setPoSession] = useState<PocketOptionSessionSnapshot>(() => pocketOptionSessionStore.getState());
@@ -344,19 +340,15 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
     }
   };
 
-  // 3. Quick Demo Fill Helper
-  const handleFillDemo = () => {
-    setMode('DEMO');
-    setTargetEndpoint('wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket');
-    setSessionToken(configuredSession && configuredIsDemo ? configuredSession : '296a5cb3321a6c66c7ab018b8a596b8b');
-    setUid(configuredUid ? String(configuredUid) : '98148605');
-    setConnectError(null);
-  };
-
-  // 4. Connect & Verify Action
+  // 4. Connect & Verify Action (REAL Live Account Only)
   const handleConnect = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setConnectError(null);
+
+    if (parsedPreview.payloadDetectedMode === 'DEMO') {
+      setConnectError('تم إيقاف الحساب التجريبي (isDemo=1). يرجى لصق جلسة الحساب الحقيقي (isDemo=0).');
+      return;
+    }
 
     // Strict Rule Validation
     if (!parsedPreview.cleanSession || parsedPreview.cleanSession.length < 8) {
@@ -372,7 +364,7 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
       return;
     }
 
-    const isDemoBool = mode === 'DEMO';
+    const isDemoBool = false;
     const parsedUidNum = uid ? parseInt(uid, 10) : parsedPreview.detectedUid || undefined;
 
     setIsSubmitting(true);
@@ -559,19 +551,6 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>{isRTL ? 'إعادة المحاولة (Retry Connection)' : 'Retry Connection'}</span>
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  handleFillDemo();
-                  setTimeout(() => {
-                    handleConnect();
-                  }, 100);
-                }}
-                className="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[10px] transition-all flex items-center gap-1 cursor-pointer shadow-sm"
-              >
-                <Zap className="w-3 h-3" />
-                <span>{isRTL ? 'تجربة الحساب التجريبي الفوري (Demo Sandbox)' : 'Try Instant Demo Sandbox'}</span>
-              </button>
             </div>
           </div>
         </div>
@@ -579,52 +558,30 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
 
       {/* CASE A: ALREADY VERIFIED STATE */}
       {isAuthVerified && (
-        <div className={`p-4 rounded-xl border space-y-3 ${
-          (poSession.account?.accountMode === 'REAL' || (!diagnostics?.account.isDemo && poSession.account?.accountMode !== 'DEMO'))
-            ? 'bg-emerald-950/40 border-emerald-500/50 shadow-lg shadow-emerald-500/10'
-            : 'bg-sky-950/40 border-sky-500/50 shadow-lg shadow-sky-500/10'
-        }`}>
+        <div className="p-4 rounded-xl border space-y-3 bg-emerald-950/40 border-emerald-500/50 shadow-lg shadow-emerald-500/10">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              {(poSession.account?.accountMode === 'REAL' || (!diagnostics?.account.isDemo && poSession.account?.accountMode !== 'DEMO')) ? (
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
-              ) : (
-                <div className="w-8 h-8 rounded-lg bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-sky-400">
-                  <Shield className="w-5 h-5" />
-                </div>
-              )}
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
               <div>
-                <span className={`font-black text-xs uppercase tracking-wide ${
-                  (poSession.account?.accountMode === 'REAL' || (!diagnostics?.account.isDemo && poSession.account?.accountMode !== 'DEMO'))
-                    ? 'text-emerald-300'
-                    : 'text-sky-300'
-                }`}>
-                  {(poSession.account?.accountMode === 'REAL' || (!diagnostics?.account.isDemo && poSession.account?.accountMode !== 'DEMO'))
-                    ? tDynamic('🟢 حساب حقيقي مباشر موثق ومحمي (REAL LIVE)')
-                    : tDynamic('🔵 حساب تجريبي افتراضي موثق ومحمي (DEMO PRACTICE)')}
+                <span className="font-black text-xs uppercase tracking-wide text-emerald-300">
+                  {tDynamic('حساب حقيقي مباشر موثق ومحمي (REAL LIVE)')}
                 </span>
                 <div className="text-[10px] text-slate-400 mt-0.5">
-                  {(poSession.account?.accountMode === 'REAL' || (!diagnostics?.account.isDemo && poSession.account?.accountMode !== 'DEMO'))
-                    ? tDynamic('متصل بسيرفر Pocket Option الحقيقي وتتداول بأموالك الحقيقية')
-                    : tDynamic('متصل بسيرفر Pocket Option التجريبي وتتداول برصيد افتراضي آمن')}
+                  {tDynamic('متصل بسيرفر Pocket Option الحقيقي وتتداول بأموالك الحقيقية')}
                 </div>
               </div>
             </div>
-            <span className={`px-2.5 py-1 rounded font-mono text-xs font-black border ${
-              (poSession.account?.accountMode === 'REAL' || (!diagnostics?.account.isDemo && poSession.account?.accountMode !== 'DEMO'))
-                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
-                : 'bg-sky-500/20 text-sky-300 border-sky-500/40 shadow-sm'
-            }`}>
-              {poSession.account?.accountMode || (diagnostics?.account.isDemo ? 'DEMO' : 'REAL')}
+            <span className="px-2.5 py-1 rounded font-mono text-xs font-black border bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm">
+              REAL
             </span>
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-xs font-mono pt-1">
             <div className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800">
               <span className="text-[10px] text-slate-400 font-sans block">{tDynamic('الرصيد المتوفر:')}</span>
-              <span className={`text-sm font-bold flex items-center gap-1.5 ${poSession.account?.accountMode === 'DEMO' || diagnostics?.account.isDemo ? 'text-sky-400' : 'text-emerald-400 font-mono'}`}>
+              <span className="text-sm font-bold flex items-center gap-1.5 text-emerald-400 font-mono">
                 {balanceAvailable && typeof balance === 'number' ? (
                   `$${balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                 ) : poSession.balanceState === 'BALANCE_LOADING' || diagnostics?.subsystems.account === 'LOADING' ? (
@@ -735,7 +692,7 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
               className={`p-3 rounded-xl border flex items-center justify-between shadow-md transition-all ${
                 parsedPreview.payloadDetectedMode === 'REAL'
                   ? 'bg-emerald-950/60 border-emerald-500/60 text-emerald-200 shadow-emerald-500/10'
-                  : 'bg-sky-950/60 border-sky-500/60 text-sky-200 shadow-sky-500/10'
+                  : 'bg-rose-950/60 border-rose-500/60 text-rose-200 shadow-rose-500/10'
               }`}
             >
               <div className="flex items-center gap-2.5">
@@ -743,27 +700,27 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
                   className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${
                     parsedPreview.payloadDetectedMode === 'REAL'
                       ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
-                      : 'bg-sky-500/20 border-sky-500/40 text-sky-400'
+                      : 'bg-rose-500/20 border-rose-500/40 text-rose-400'
                   }`}
                 >
                   {parsedPreview.payloadDetectedMode === 'REAL' ? (
                     <ShieldCheck className="w-5 h-5" />
                   ) : (
-                    <Shield className="w-5 h-5" />
+                    <ShieldAlert className="w-5 h-5" />
                   )}
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-black tracking-wide">
                       {parsedPreview.payloadDetectedMode === 'REAL'
-                        ? tDynamic('🟢 تم التعرف: حساب حقيقي مباشر (REAL LIVE)')
-                        : tDynamic('🔵 تم التعرف: حساب تجريبي افتراضي (DEMO PRACTICE)')}
+                        ? tDynamic('تم التعرف: حساب حقيقي مباشر (REAL LIVE)')
+                        : tDynamic('تم رفض الجلسة: حساب تجريبي غير مدعوم (isDemo = 1)')}
                     </span>
                     <span
                       className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold border ${
                         parsedPreview.payloadDetectedMode === 'REAL'
                           ? 'bg-emerald-500/30 text-emerald-300 border-emerald-500/40'
-                          : 'bg-sky-500/30 text-sky-300 border-sky-500/40'
+                          : 'bg-rose-500/30 text-rose-300 border-rose-500/40'
                       }`}
                     >
                       {parsedPreview.payloadDetectedMode === 'REAL' ? 'isDemo = 0' : 'isDemo = 1'}
@@ -772,110 +729,27 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
                   <p className="text-[11px] opacity-80 mt-0.5 font-sans leading-relaxed">
                     {parsedPreview.payloadDetectedMode === 'REAL'
                       ? tDynamic('تم فحص الـ SSD بنجاح: تم التعرف على جلسة تداول بأموال حقيقية على منصة Pocket Option.')
-                      : tDynamic('تم فحص الـ SSD بنجاح: تم التعرف على جلسة تدريب آمنة برصيد افتراضي.')}
+                      : tDynamic('تم إيقاف الحساب التجريبي؛ يرجى لصق جلسة الحساب الحقيقي (isDemo=0).')}
                   </p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* 3. Mismatch Warning (If user explicitly selected opposite of what SSD says) */}
-          {sessionToken && parsedPreview.isMismatch && (
-            <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-xs text-amber-200 flex items-center justify-between gap-2 shadow-sm">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                <span className="text-[11px] font-sans">
-                  {mode === 'DEMO'
-                    ? tDynamic('تنبيه: الـ SSD يحتوي على حساب حقيقي (isDemo=0) بينما تم تحديد الحساب التجريبي!')
-                    : tDynamic('تنبيه: الـ SSD يحتوي على حساب تجريبي (isDemo=1) بينما تم تحديد الحساب الحقيقي!')}
-                </span>
+          {/* 3. Real Account Lock Indicator */}
+          <div className="p-3 rounded-xl border bg-emerald-500/10 border-emerald-500/40 text-emerald-200 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <div>
+                <div className="text-xs font-black uppercase tracking-wide">
+                  {tTerm('Real Account')} (REAL LIVE)
+                </div>
+                <div className="text-[10px] opacity-80 font-sans">
+                  {tDynamic('اتصال مباشر بالحساب الحقيقي فقط (isDemo = 0)')}
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setMode(parsedPreview.payloadDetectedMode || 'DEMO')}
-                className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[10px] shrink-0 cursor-pointer transition-all"
-              >
-                {tDynamic('مزامنة فورية')}
-              </button>
             </div>
-          )}
-
-          {/* 4. Explicit Mode Selector Cards (DEMO vs REAL) */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-[11px] font-semibold text-slate-300 block">
-                {t('settings.accountFeedType', 'نوع الحساب المستهدف')} <span className="text-amber-400">*</span>
-              </label>
-              <span className="text-[10px] text-slate-400 font-sans">
-                {mode === 'REAL' ? '🟢 وضع الأموال الحقيقية' : '🔵 وضع الرصيد الافتراضي'}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2.5">
-              {/* DEMO CARD */}
-              <button
-                type="button"
-                onClick={() => {
-                  userModeExplicitRef.current = true;
-                  setMode('DEMO');
-                }}
-                className={`p-3 rounded-xl border text-right transition-all flex flex-col justify-between cursor-pointer relative overflow-hidden ${
-                  mode === 'DEMO'
-                    ? 'bg-sky-500/15 border-sky-500 text-sky-200 ring-2 ring-sky-500/30 shadow-lg shadow-sky-500/10'
-                    : 'bg-slate-950/80 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <Shield className={`w-4 h-4 ${mode === 'DEMO' ? 'text-sky-400' : 'text-slate-500'}`} />
-                    <span className="text-xs font-black uppercase tracking-wide">
-                      {tTerm('Demo Account')} (DEMO)
-                    </span>
-                  </div>
-                  {mode === 'DEMO' && (
-                    <span className="w-2 h-2 rounded-full bg-sky-400 animate-ping" />
-                  )}
-                </div>
-                <p className="text-[10px] opacity-80 leading-relaxed font-sans">
-                  {tDynamic('رصيد افتراضي للتدريب والتجربة بأمان 100%')}
-                </p>
-                <span className="text-[9px] font-mono mt-1 text-sky-400 font-bold block">
-                  isDemo = 1 • عزل تجريبي
-                </span>
-              </button>
-
-              {/* REAL CARD */}
-              <button
-                type="button"
-                onClick={() => {
-                  userModeExplicitRef.current = true;
-                  setMode('REAL');
-                }}
-                className={`p-3 rounded-xl border text-right transition-all flex flex-col justify-between cursor-pointer relative overflow-hidden ${
-                  mode === 'REAL'
-                    ? 'bg-emerald-500/15 border-emerald-500 text-emerald-200 ring-2 ring-emerald-500/30 shadow-lg shadow-emerald-500/10'
-                    : 'bg-slate-950/80 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <ShieldCheck className={`w-4 h-4 ${mode === 'REAL' ? 'text-emerald-400' : 'text-slate-500'}`} />
-                    <span className="text-xs font-black uppercase tracking-wide">
-                      {tTerm('Real Account')} (REAL)
-                    </span>
-                  </div>
-                  {mode === 'REAL' && (
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  )}
-                </div>
-                <p className="text-[10px] opacity-80 leading-relaxed font-sans">
-                  {tDynamic('أموال حقيقية • تداول مباشر في السوق الحقيقي')}
-                </p>
-                <span className="text-[9px] font-mono mt-1 text-emerald-400 font-bold block">
-                  isDemo = 0 • اتصال حقيقي
-                </span>
-              </button>
-            </div>
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
           </div>
 
           {/* 5. UID Field */}
@@ -928,9 +802,7 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
                     ? 'api-eu.po.market (رئيسي موصى به)'
                     : targetEndpoint.includes('api-us')
                     ? 'api-us-north.po.market (أمريكا)'
-                    : targetEndpoint.includes('api-sc')
-                    ? 'api-sc.po.market (سيشيل)'
-                    : 'demo-api-eu.po.market (خادم ضيوف)'}
+                    : 'api-sc.po.market (سيشيل)'}
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-1.5 pt-1 pb-0.5">
@@ -968,17 +840,6 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
                 >
                   api-sc
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setTargetEndpoint('wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket')}
-                  className={`px-2 py-0.5 rounded text-[9px] font-mono border transition-all cursor-pointer ${
-                    targetEndpoint.includes('demo-api-eu.po.market')
-                      ? 'bg-sky-500/20 text-sky-300 border-sky-500/50 font-bold'
-                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  demo-api
-                </button>
               </div>
               <div className="flex items-center justify-between pt-0.5">
                 <span className="text-slate-400">{tDynamic('حالة التحقق المبدئي:')}</span>
@@ -1004,18 +865,6 @@ export const GatewayOnboardingCard: React.FC<GatewayOnboardingCardProps> = ({
               </ol>
             </div>
           )}
-
-          {/* Quick Demo Button for Instant Testing */}
-          <div className="flex items-center justify-between pt-0.5">
-            <button
-              type="button"
-              onClick={handleFillDemo}
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400 hover:text-amber-300 transition-colors cursor-pointer"
-            >
-              <Zap className="w-3 h-3 text-amber-400" />
-              <span>⚡ {tDynamic('Fast 1-Click Demo Sandbox Testing')}</span>
-            </button>
-          </div>
 
           {/* Google Cloud Auth Status Row */}
           <div className="p-2 rounded-xl bg-slate-950/70 border border-slate-800/80 flex items-center justify-between text-xs">

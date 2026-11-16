@@ -9,7 +9,6 @@ import { PocketOptionService } from './server/PocketOptionService';
 import { StrategyEngine } from './server/StrategyEngine';
 import { StrategySettings, AccountMode, Candle } from './server/types';
 import { SabaaService } from './server/sabaaServices';
-import { GeminiAnalysisService } from './server/GeminiAnalysisService';
 import { HistoricalCandleService } from './server/HistoricalCandleService';
 import { AutoTraderEngine } from './server/AutoTraderEngine';
 import { SbaaStrategyEngine } from './server/sbaa/SbaaStrategyEngine';
@@ -47,7 +46,6 @@ async function startServer() {
   const otcCandleStore = marketDataStore.getOTCCandleStore();
   const strategyEngine = new StrategyEngine(candleBuilder, undefined, marketDataStore);
   const sabaaService = new SabaaService();
-  const geminiService = GeminiAnalysisService.getInstance();
 
   // SSE Clients manager
   const sseClients: Response[] = [];
@@ -95,13 +93,9 @@ async function startServer() {
   const realCreds = PocketOptionService.parseCredentials(rawSession, false);
   const demoCreds = PocketOptionService.parseCredentials(isDemoPacket ? rawDemoEnv : rawSession, true);
 
-  // Default to DEMO mode (safe for market data, charts, and signals) unless explicitly requested via PO_DEFAULT_MODE=REAL
+  // Default strictly to REAL mode
   const defaultMode: AccountMode =
-    process.env.PO_DEFAULT_MODE === 'REAL'
-      ? 'REAL'
-      : isDemoFlag || !process.env.PO_DEFAULT_MODE
-      ? 'DEMO'
-      : 'DEMO';
+    process.env.PO_DEFAULT_MODE === 'DEMO' ? 'DEMO' : 'REAL';
 
   let defaultEndpoint = PocketOptionService.cleanEndpoint(
     process.env.PO_ENDPOINT || 'wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket'
@@ -118,7 +112,7 @@ async function startServer() {
   );
 
   const sbaaEngine = new SbaaStrategyEngine(candleBuilder, poService, marketDataStore, broadcastSSE);
-  const autoTraderEngine = new AutoTraderEngine(strategyEngine, poService, broadcastSSE, sbaaEngine);
+  const autoTraderEngine = new AutoTraderEngine(strategyEngine, poService, broadcastSSE, sbaaEngine, undefined, candleBuilder, true, marketDataStore);
 
   marketDataStore.setBrokerHistoryRequester((asset, tf) => {
     return poService.requestHistoricalCandles(asset, tf);
@@ -257,39 +251,6 @@ async function startServer() {
           })
           .catch((err) => {
             console.warn('[SERVER] Telegram signal broadcast notice:', err?.message || err);
-          });
-      }
-
-      // Automatic AI Chart Analysis (Optional, debounced, closed candles only)
-      if (geminiService.canRunAutoAnalysis(closedCandle.time)) {
-        const poDiag = poService.getDiagnostics();
-        const dataStatus = poDiag.isStale ? 'STALE' : poService.isConnected() ? 'LIVE' : 'OFFLINE';
-        geminiService
-          .analyzeRealChart({
-            symbol: asset,
-            timeframe,
-            dataStatus,
-            freshnessSeconds: poDiag.freshnessSeconds,
-            completedCandles: allClosed,
-            indicators,
-            strategyEngineResult: {
-              strategyName: signal.strategy || strategyEngine.getSettings().strategy,
-              direction: signal.type,
-              actualConfidence: signal.confidence,
-              selectedThreshold: signal.selectedThreshold || strategyEngine.getSettings().selectedThreshold || 70,
-              conditionsMet: signal.auditTrail?.passedConditions || signal.details || [],
-              conditionsFailed: signal.auditTrail?.failedConditions || signal.reasons || [],
-              conflicts: signal.auditTrail?.conflicts || [],
-              regime: signal.marketRegime,
-            },
-          })
-          .then((analysis) => {
-            if (analysis) {
-              broadcastSSE('ai_chart_analysis', analysis);
-            }
-          })
-          .catch((err) => {
-            console.warn('[SERVER] Auto AI analysis notice:', err?.message || err);
           });
       }
     } catch (err) {
@@ -699,6 +660,10 @@ async function startServer() {
     if (asset) {
       strategyEngine.resetActiveSignal();
       poService.subscribeAsset(asset, timeframe);
+      sbaaEngine.setAsset(asset);
+      if (!autoTraderEngine.getStatus().isRunning) {
+        autoTraderEngine.setAsset(asset);
+      }
       marketDataStore.switchAsset(asset, timeframe ? Number(timeframe) : 60).then(() => {
         const closed = marketDataStore.getClosedCandles();
         if (closed.length > 0) {
@@ -765,16 +730,20 @@ async function startServer() {
       strategyEngine.updateSettings(settings);
     }
 
-    if (isDemo !== undefined) {
-      const mode: AccountMode = isDemo ? 'DEMO' : 'REAL';
-      marketDataStore.setAccountMode(mode, poService.getSessionGeneration());
-    }
+    // Lock /api/settings to REAL mode only
+    const lockedIsDemo = false;
+    marketDataStore.setAccountMode('REAL', poService.getSessionGeneration());
 
-    if (typeof endpoint === 'string' || typeof sessionToken === 'string') {
+    const safeEndpoint =
+      typeof endpoint === 'string' && !endpoint.toLowerCase().includes('demo-api')
+        ? endpoint
+        : undefined;
+
+    if (safeEndpoint || typeof sessionToken === 'string') {
       poService.updateConfig(
-        typeof endpoint === 'string' ? endpoint : undefined,
+        safeEndpoint,
         typeof sessionToken === 'string' ? sessionToken : undefined,
-        isDemo,
+        lockedIsDemo,
         uid
       );
     }
@@ -810,45 +779,30 @@ async function startServer() {
       // Pre-parse credentials to detect whether the SSD specifically contains isDemo: 0 (REAL) or 1 (DEMO)
       const preParse = PocketOptionService.parseCredentials(effectiveSession, isDemo === true, effectiveUid ? Number(effectiveUid) : undefined);
 
-      let determinedMode: AccountMode;
-      if (preParse.detectedModeFromPayload) {
-        // If SSD token payload explicitly contains isDemo: 0 (REAL) or 1 (DEMO), payload is ground truth
-        determinedMode = preParse.detectedModeFromPayload;
-      } else if (mode === 'REAL' || mode === 'DEMO') {
-        determinedMode = mode;
-      } else if (isDemo !== undefined && isDemo !== null) {
-        determinedMode = isDemo ? 'DEMO' : 'REAL';
-      } else {
-        determinedMode = preParse.isDemo === 0 ? 'REAL' : 'DEMO';
+      let determinedMode: AccountMode = 'REAL';
+      if (mode === 'REAL') {
+        determinedMode = 'REAL';
+      } else if (mode === 'DEMO' || isDemo === true || preParse.detectedModeFromPayload === 'DEMO') {
+        res.status(400).json({
+          success: false,
+          ok: false,
+          error: 'تم إيقاف الحساب التجريبي (DEMO). يرجى استخدام جلسة الحساب الحقيقي فقط (isDemo=0).',
+          errorCode: 'DEMO_DISABLED',
+        });
+        return;
       }
 
-      const isDemoBool = determinedMode === 'DEMO';
-
-      if (isDemoBool && (effectiveSession.startsWith('po_demo_') || effectiveSession.toLowerCase() === 'demo')) {
-        effectiveSession = demoCreds.session || '296a5cb3321a6c66c7ab018b8a596b8b';
-        effectiveUid = effectiveUid || demoCreds.uid || 98148605;
-      }
+      const isDemoBool = false;
 
       const parsed = PocketOptionService.parseCredentials(effectiveSession, isDemoBool, effectiveUid ? Number(effectiveUid) : undefined);
       const targetUid = effectiveUid || parsed.uid;
 
-      // Endpoint Routing:
-      // Pocket Option registered user sessions (both DEMO and REAL) reside on the production cluster (api-eu.po.market).
-      // demo-api-eu.po.market is only for unauthenticated guest sandboxes and rejects registered user tokens.
       let targetEndpoint = endpoint && typeof endpoint === 'string' && endpoint.trim().length > 0
         ? PocketOptionService.cleanEndpoint(endpoint.trim())
         : undefined;
 
-      const isPublicGuest = !effectiveSession || effectiveSession.startsWith('po_demo_') || effectiveSession.toLowerCase() === 'demo';
-
-      if (!targetEndpoint) {
-        targetEndpoint = (isDemoBool && isPublicGuest)
-          ? 'wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket'
-          : 'wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket';
-      } else if (!isPublicGuest && targetEndpoint.includes('demo-api-')) {
-        // Automatically route registered user tokens away from demo-api-eu to api-eu.po.market
-        // to prevent connection rejections (NotAuthorized / Code 1005).
-        targetEndpoint = targetEndpoint.replace('demo-api-', 'api-');
+      if (!targetEndpoint || targetEndpoint.includes('demo-api-')) {
+        targetEndpoint = 'wss://api-eu.po.market/socket.io/?EIO=4&transport=websocket';
       }
 
       console.log(`[PO-CONNECT] Connecting account: Mode=${determinedMode} (isDemo=${isDemoBool}), PayloadDetected=${preParse.detectedModeFromPayload || 'NONE'}, Endpoint=${targetEndpoint}, UID=${targetUid || 'auto'}`);
@@ -905,15 +859,19 @@ async function startServer() {
 
   app.post('/api/account/switch-mode', (req: Request, res: Response) => {
     const { mode } = req.body;
-    if (mode !== 'REAL' && mode !== 'DEMO') {
-      res.status(400).json({ success: false, error: "Mode must be 'REAL' or 'DEMO'" });
+    if (mode !== 'REAL') {
+      res.status(400).json({
+        success: false,
+        error: 'تم إيقاف الحساب التجريبي (DEMO). المنصة تعمل بالحساب الحقيقي (REAL) فقط.',
+        errorCode: 'DEMO_DISABLED',
+      });
       return;
     }
-    poService.switchAccountMode(mode);
-    marketDataStore.setAccountMode(mode, poService.getSessionGeneration());
+    poService.switchAccountMode('REAL');
+    marketDataStore.setAccountMode('REAL', poService.getSessionGeneration());
     res.json({
       success: true,
-      mode,
+      mode: 'REAL',
       diagnostics: poService.getDiagnostics(),
     });
   });
@@ -945,7 +903,7 @@ async function startServer() {
     });
   });
 
-  // ==================== SABAA AI SOLUTION INSTITUTIONAL API ROUTES ====================
+  // ==================== SABAA QUANT INSTITUTIONAL API ROUTES ====================
 
   // Real Pocket Option Deal & Order Execution Routes
   app.get('/api/orders', (req: Request, res: Response) => {
@@ -1037,8 +995,19 @@ async function startServer() {
     }
   });
 
-  app.post('/api/autotrader/start', (req: Request, res: Response) => {
-    const result = autoTraderEngine.start(req.body);
+  app.post('/api/autotrader/start', async (req: Request, res: Response) => {
+    const config = { ...req.body, isDemo: false };
+    const result = autoTraderEngine.start(config);
+    const activeCfg = autoTraderEngine.getStatus().config;
+    const syncAsset = activeCfg.asset || poService.getActiveAsset();
+    const syncTf = Number(activeCfg.timeframe) || poService.getTimeframe();
+    if (syncAsset && syncTf && (syncAsset !== poService.getActiveAsset() || syncTf !== poService.getTimeframe())) {
+      poService.setTimeframe(syncTf);
+      poService.subscribeAsset(syncAsset, syncTf);
+      sbaaEngine.setAsset(syncAsset);
+      sbaaEngine.setTimeframe(syncTf);
+      marketDataStore.switchAsset(syncAsset, syncTf).catch(() => {});
+    }
     res.json({ ...result, status: autoTraderEngine.getStatus() });
   });
 
@@ -1063,7 +1032,17 @@ async function startServer() {
   });
 
   app.post('/api/autotrader/save-settings', (req: Request, res: Response) => {
-    const result = autoTraderEngine.saveSettings(req.body);
+    const result = autoTraderEngine.saveSettings({ ...req.body, isDemo: false });
+    const activeCfg = autoTraderEngine.getStatus().config;
+    const syncAsset = activeCfg.asset || poService.getActiveAsset();
+    const syncTf = Number(activeCfg.timeframe) || poService.getTimeframe();
+    if (syncAsset && syncTf && (syncAsset !== poService.getActiveAsset() || syncTf !== poService.getTimeframe())) {
+      poService.setTimeframe(syncTf);
+      poService.subscribeAsset(syncAsset, syncTf);
+      sbaaEngine.setAsset(syncAsset);
+      sbaaEngine.setTimeframe(syncTf);
+      marketDataStore.switchAsset(syncAsset, syncTf).catch(() => {});
+    }
     res.json({ ...result, status: autoTraderEngine.getStatus() });
   });
 
@@ -1185,202 +1164,6 @@ async function startServer() {
     res.json(scannerData);
   });
 
-  // AI Market Analysis Engine (SMC / ICT / Quantitative via Gemini 3.8 Flash)
-  app.post('/api/ai/analyze', async (req: Request, res: Response) => {
-    try {
-      const { symbol, timeframe, engine } = req.body;
-      const activeAsset = symbol || poService.getActiveAsset();
-      const tf = Number(timeframe) || poService.getTimeframe();
-      const candles = candleBuilder.getCandles(activeAsset, tf);
-      const indicators = strategyEngine.calculateIndicators(activeAsset, tf);
-
-      const resultWrapper = await geminiService.generateSMCAnalysis({
-        symbol: activeAsset,
-        timeframe: `${tf}s`,
-        engine: engine || 'SMC / Liquidity Order Blocks',
-        candles,
-        indicators,
-      });
-
-      if (resultWrapper.data) {
-        res.json(resultWrapper.data);
-      } else {
-        res.status(resultWrapper.errorCode === '503' ? 503 : 500).json({
-          error: resultWrapper.userMessage,
-          status: resultWrapper.status,
-          retryable: resultWrapper.retryable,
-        });
-      }
-    } catch (err: any) {
-      console.error('[SABAA API] AI analysis error:', err);
-      res.status(500).json({ error: 'Failed to generate AI analysis', message: err?.message || 'Internal server error' });
-    }
-  });
-
-  // ==================== GOOGLE GEMINI AI API KEY & CHART ANALYSIS PIPELINE ====================
-
-  // Get current AI configuration & connection status
-  app.get('/api/ai/config', (req: Request, res: Response) => {
-    res.json(geminiService.getConfigSnapshot());
-  });
-
-  // Update AI model selection or data permissions
-  app.post('/api/ai/config', (req: Request, res: Response) => {
-    try {
-      const { model, permissions } = req.body;
-      if (model) {
-        const ok = geminiService.setSelectedModel(model);
-        if (!ok) {
-          return res.status(400).json({ error: 'Invalid or unsupported model' });
-        }
-      }
-      if (permissions && typeof permissions === 'object') {
-        geminiService.updatePermissions(permissions);
-      }
-      res.json({ success: true, config: geminiService.getConfigSnapshot() });
-    } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to update AI configuration' });
-    }
-  });
-
-  // Save Google AI API key securely on backend
-  app.post('/api/ai/key', (req: Request, res: Response) => {
-    try {
-      const { key } = req.body;
-      if (!key || typeof key !== 'string') {
-        return res.status(400).json({ success: false, error: 'API key string is required' });
-      }
-      const result = geminiService.saveKey(key);
-      if (!result.success) {
-        return res.status(400).json(result);
-      }
-      res.json({ ...result, config: geminiService.getConfigSnapshot() });
-    } catch (err: any) {
-      res.status(500).json({ success: false, error: err?.message || 'Failed to save API key' });
-    }
-  });
-
-  // Remove Google AI API key
-  app.post('/api/ai/key/remove', (req: Request, res: Response) => {
-    try {
-      geminiService.removeKey();
-      res.json({ success: true, config: geminiService.getConfigSnapshot() });
-    } catch (err: any) {
-      res.status(500).json({ success: false, error: err?.message || 'Failed to remove API key' });
-    }
-  });
-
-  // Real connection test to Google Gemini API
-  app.post('/api/ai/test', async (req: Request, res: Response) => {
-    try {
-      const { key, model } = req.body;
-      const result = await geminiService.testConnection(key, model);
-      res.json(result);
-    } catch (err: any) {
-      res.status(500).json({
-        success: false,
-        status: 'CONNECTION ERROR',
-        errorCategory: 'CONNECTION_ERROR',
-        message: err?.message || 'Connection test failed',
-      });
-    }
-  });
-
-  // Real Chart Analysis Pipeline on actual market data
-  app.post('/api/ai/analyze-chart', async (req: Request, res: Response) => {
-    try {
-      const symbol = req.body.symbol || poService.getActiveAsset();
-      const timeframe = Number(req.body.timeframe) || poService.getTimeframe();
-      const forceRefresh = Boolean(req.body.forceRefresh);
-
-      let candles = marketDataStore.getCandles(symbol, timeframe);
-      if (candles.length === 0 && marketDataStore.getActiveAsset() === symbol) {
-        candles = marketDataStore.getAllCandles();
-      }
-      if (candles.length === 0) {
-        candles = candleBuilder.getCandles(symbol, timeframe);
-      }
-
-      // Filter completed candles
-      const completedCandles = candles.filter((c) => c.isClosed);
-      const indicators = strategyEngine.calculateIndicators(symbol, timeframe);
-      const activeSignal = strategyEngine.generateSignal(symbol, timeframe, getUpstreamGate());
-      const poDiag = poService.getDiagnostics();
-      const dataStatus: 'LIVE' | 'STALE' | 'OFFLINE' = poDiag.isStale
-        ? 'STALE'
-        : poService.isConnected()
-        ? 'LIVE'
-        : 'OFFLINE';
-
-      const analysis = await geminiService.analyzeRealChart({
-        symbol,
-        timeframe,
-        dataStatus,
-        freshnessSeconds: poDiag.freshnessSeconds,
-        completedCandles,
-        indicators,
-        strategyEngineResult: {
-          strategyName: activeSignal.strategy || strategyEngine.getSettings().strategy,
-          direction: activeSignal.type,
-          actualConfidence: activeSignal.confidence,
-          selectedThreshold: activeSignal.selectedThreshold || strategyEngine.getSettings().selectedThreshold || 70,
-          conditionsMet: activeSignal.auditTrail?.passedConditions || activeSignal.details || [],
-          conditionsFailed: activeSignal.auditTrail?.failedConditions || activeSignal.reasons || [],
-          conflicts: activeSignal.auditTrail?.conflicts || [],
-          regime: activeSignal.marketRegime,
-        },
-      });
-
-      res.json(analysis);
-    } catch (err: any) {
-      console.error('[API] /api/ai/analyze-chart error:', err);
-      const is503 = err?.message?.includes('503') || err?.message?.includes('UNAVAILABLE');
-      const is429 = err?.message?.includes('429') || err?.message?.includes('QUOTA') || err?.message?.includes('RESOURCE_EXHAUSTED');
-      res.status(is503 ? 503 : is429 ? 429 : 500).json({
-        error: err?.message || 'Chart analysis failed',
-        errorCode: is503 ? '503' : is429 ? '429' : '500',
-        retryable: is503 || is429,
-        status: is503 ? 'TEMPORARILY_UNAVAILABLE' : is429 ? 'RATE_LIMITED' : 'ERROR',
-        technicalDetails: String(err?.stack || err),
-      });
-    }
-  });
-
-  // Get AI Audit Logs
-  app.get('/api/ai/audit-logs', (req: Request, res: Response) => {
-    res.json(geminiService.getAuditLogs());
-  });
-
-  // Computer Vision Chart Analyzer (Gemini 3.8 Flash Multimodal Vision)
-  app.post('/api/vision/analyze', async (req: Request, res: Response) => {
-    try {
-      const { imageBase64, mimeType, prompt } = req.body;
-      if (!imageBase64) {
-        res.status(400).json({ error: 'imageBase64 parameter is required' });
-        return;
-      }
-
-      const resultWrapper = await geminiService.analyzeVisionChart({
-        imageBase64,
-        mimeType: mimeType || 'image/png',
-        prompt,
-      });
-
-      if (resultWrapper.data) {
-        res.json(resultWrapper.data);
-      } else {
-        res.status(resultWrapper.errorCode === '503' ? 503 : 500).json({
-          error: resultWrapper.userMessage,
-          status: resultWrapper.status,
-          retryable: resultWrapper.retryable,
-        });
-      }
-    } catch (err: any) {
-      console.error('[SABAA API] Vision analysis error:', err);
-      res.status(500).json({ error: 'Failed to process chart vision', message: err?.message || 'Vision analysis error' });
-    }
-  });
-
   // Admin & System Telemetry
   app.get('/api/admin/health', (req: Request, res: Response) => {
     res.json(sabaaService.getHealthTelemetry(sseClients.length, process.memoryUsage()));
@@ -1398,7 +1181,7 @@ async function startServer() {
       res.setHeader('Cache-Control', 'public, max-age=300');
       return res.sendFile(downloadPage);
     }
-    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>SABAA AI - Download</title></head><body style="background:#020617;color:white;text-align:center;padding:50px;font-family:sans-serif;"><h1>SABAA AI</h1><p>Android App</p><p><a href="/download/SABAA-AI.apk" style="background:#10b981;color:white;padding:15px 30px;border-radius:10px;text-decoration:none;font-weight:bold;display:inline-block;">Download APK</a></p></body></html>`);
+    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>SABAA QUANT - Download</title></head><body style="background:#020617;color:white;text-align:center;padding:50px;font-family:sans-serif;"><h1>SABAA QUANT</h1><p>Android App</p><p><a href="/download/SABAA-AI.apk" style="background:#10b981;color:white;padding:15px 30px;border-radius:10px;text-decoration:none;font-weight:bold;display:inline-block;">Download APK</a></p></body></html>`);
   });
 
   const serveApkFile = (req: Request, res: Response, targetFilename?: string) => {
@@ -1485,7 +1268,7 @@ async function startServer() {
         versionCode: 1,
         apkUrl: '/download/SABAA-AI.apk',
         mandatory: false,
-        releaseNotes: 'الإصدار الرسمي لتطبيق SABAA AI SOLUTION لمنصة أندرويد'
+        releaseNotes: 'الإصدار الرسمي لتطبيق SABAA QUANT لمنصة أندرويد'
       });
     }
     serveApkFile(req, res, filename);
@@ -1504,7 +1287,7 @@ async function startServer() {
       versionCode: 1,
       apkUrl: '/download/SABAA-AI.apk',
       mandatory: false,
-      releaseNotes: 'الإصدار الرسمي لتطبيق SABAA AI SOLUTION لمنصة أندرويد'
+      releaseNotes: 'الإصدار الرسمي لتطبيق SABAA QUANT لمنصة أندرويد'
     });
   });
 

@@ -1,7 +1,7 @@
 export const en = {
   // Brand & App
-  appTitle: 'SABAA AI SOLUTION | Institutional Quantitative & AI Trading Platform',
-  appSubtitle: 'Institutional algorithmic engine, computer vision analysis, multi-strategy confluence, and risk management',
+  appTitle: 'SABAA QUANT | Institutional Quantitative & Algorithmic Trading Platform',
+  appSubtitle: 'Institutional algorithmic engine, multi-strategy confluence, and strict capital risk management',
 
   // Navigation
   nav: {
@@ -16,7 +16,7 @@ export const en = {
     indicators: 'Indicators',
     indicatorsSub: 'Quantitative Formulas',
     strategies: 'Strategies',
-    strategiesSub: '21 Algorithm Modules',
+    strategiesSub: '26 Algorithm Modules',
     signals: 'Signals',
     signalsSub: 'Real-Time Confluence',
     history: 'History',
@@ -29,10 +29,10 @@ export const en = {
     riskSub: 'Position Sizing & Drawdown',
     scanner: 'Market Scanner',
     scannerSub: 'Multi-Asset Opportunities',
-    vision: 'Vision AI',
-    visionSub: 'Chart Pattern Recognition',
-    ai: 'AI Assistant',
-    aiSub: 'Quantitative Advisory',
+    vision: 'Pattern Engine',
+    visionSub: 'Price Action Structure',
+    ai: 'Quant Matrix',
+    aiSub: 'Statistical Scoring',
     admin: 'Admin Console',
     adminSub: 'Diagnostics & System',
   },
@@ -190,7 +190,7 @@ export const en = {
     nonRepaintingNotice: 'Audited Non-Repainting: Calculated exclusively from confirmed closed candles.',
     viewFullRationale: 'View Full Rationale',
     hideBreakdown: 'Hide Breakdown',
-    noSignalsGenerated: 'Waiting for market setup meeting all 21 quantitative criteria.',
+    noSignalsGenerated: 'Waiting for market setup meeting all 26 quantitative criteria.',
   },
 
   // Signal History & Auditing
@@ -255,12 +255,12 @@ export const en = {
     heroSubtitle: 'Autonomous multi-factor algorithmic analysis, certified non-repainting mathematical indicators, and real-time broker execution telemetry.',
     connectTerminal: 'Open Trading Terminal',
     configureSession: 'Configure Trading Session (SSD)',
-    feature1Title: '21 Independent Quantitative Strategies',
+    feature1Title: '26 Independent Quantitative Strategies',
     feature1Desc: 'Simultaneous mathematical evaluation across momentum, trend-following, volatility bands, and market structure.',
     feature2Title: 'Zero-Repaint Verification',
     feature2Desc: 'Calculated exclusively on confirmed closed candles. Marker placements and statistical scores freeze at candle close.',
-    feature3Title: 'Strict Account & Data Isolation',
-    feature3Desc: 'Complete sandbox separation between DEMO and REAL accounts, preventing data contamination and cross-execution.',
+    feature3Title: 'Real Account Execution Integrity',
+    feature3Desc: 'Strict verification of REAL LIVE broker session, account balance, and 15+ closed candles prior to every trade.',
     feature4Title: 'Real Market Tick Aggregation',
     feature4Desc: 'Production-grade CandleBuilder derives exact OHLC values from real verified market ticks with zero synthetic fabrication.',
   },
@@ -445,7 +445,7 @@ export const en = {
   // Strategies Configuration Panel
   config: {
     title: 'Strategy Configuration & Weights',
-    subtitle: 'Customize weights of 21 algorithmic modules and confluence parameters',
+    subtitle: 'Customize weights of 26 algorithmic modules and confluence parameters',
     globalSettings: 'Global Confluence Settings',
     minConfidence: 'Minimum Confidence Threshold (50 - 100%)',
     minConfirmations: 'Minimum Confirmations Required',

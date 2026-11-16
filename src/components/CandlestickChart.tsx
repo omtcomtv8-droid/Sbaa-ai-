@@ -30,7 +30,6 @@ import {
   TrendingDown,
   Layers,
   Clock,
-  Sliders,
   ChevronDown,
 } from 'lucide-react';
 import { useDeviceScale } from '../hooks/useDeviceScale';
@@ -122,7 +121,6 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
 
   // Responsive Device-Scale Engine Integration
   const { layoutMode, isPhone, isLandscape, optimalChartHeight } = useDeviceScale();
-  const [showOverlaysBar, setShowOverlaysBar] = useState(false);
   const lastSizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
 
   // Overlays State
@@ -1154,21 +1152,6 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
             >
               {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
             </button>
-
-            {/* Overlays toggle button */}
-            <button
-              onClick={() => setShowOverlaysBar(!showOverlaysBar)}
-              className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold transition-colors flex items-center gap-1 ${
-                showOverlaysBar
-                  ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-500/40'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-              title="Toggle Indicators Toolbar"
-            >
-              <Sliders className="w-3 h-3 text-cyan-400" />
-              <span className="hidden sm:inline">INDICATORS</span>
-            </button>
-
             <button
               onClick={() => setShowDiagnosticsOverlay(!showDiagnosticsOverlay)}
               className={`p-1 rounded transition-colors hidden xs:flex items-center ${
@@ -1195,101 +1178,6 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
           </div>
         </div>
       </div>
-
-      {/* 2. TECHNICAL INDICATOR OVERLAYS TOOLBAR (Responsive Collapsible / Desktop Always) */}
-      {(!isPhone || showOverlaysBar) && (
-        <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 bg-slate-900/60 border-b border-slate-800/80 text-[10px] font-mono overflow-x-auto no-scrollbar scrollbar-none flex-nowrap">
-          <div className="flex items-center gap-1 shrink-0">
-            <span className="font-bold text-slate-500 uppercase mr-1 text-[9px] sm:text-[10px]">OVERLAYS:</span>
-            <button
-              onClick={() => setShowEMA(!showEMA)}
-              className={`px-1.5 sm:px-2 py-0.5 rounded font-bold transition-colors whitespace-nowrap ${
-                showEMA
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              EMA 9/21
-            </button>
-            <button
-              onClick={() => setShowSMA(!showSMA)}
-              className={`px-1.5 sm:px-2 py-0.5 rounded font-bold transition-colors whitespace-nowrap ${
-                showSMA
-                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              SMA 50
-            </button>
-            <button
-              onClick={() => setShowBollinger(!showBollinger)}
-              className={`px-1.5 sm:px-2 py-0.5 rounded font-bold transition-colors whitespace-nowrap ${
-                showBollinger
-                  ? 'bg-violet-500/20 text-violet-300 border border-violet-500/40'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              BOLLINGER (20, 2)
-            </button>
-            <button
-              onClick={() => setShowLevels(!showLevels)}
-              className={`px-1.5 sm:px-2 py-0.5 rounded font-bold transition-colors whitespace-nowrap ${
-                showLevels
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              SUPPORT / RES
-            </button>
-            <button
-              onClick={() => setShowGann(!showGann)}
-              className={`px-1.5 sm:px-2 py-0.5 rounded font-bold transition-colors whitespace-nowrap ${
-                showGann
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              GANN 8ths/1x1
-            </button>
-            <button
-              onClick={() => setShowElliott(!showElliott)}
-              className={`px-1.5 sm:px-2 py-0.5 rounded font-bold transition-colors whitespace-nowrap ${
-                showElliott
-                  ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              ELLIOTT WAVES
-            </button>
-            <button
-              onClick={() => setShowDarvas(!showDarvas)}
-              className={`px-1.5 sm:px-2 py-0.5 rounded font-bold transition-colors whitespace-nowrap ${
-                showDarvas
-                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              DARVAS BOX
-            </button>
-          </div>
-
-          <div className="flex items-center gap-1 shrink-0">
-            <span className="font-bold text-slate-500 uppercase mr-1 text-[9px] sm:text-[10px]">PANES:</span>
-            <button
-              onClick={() => setShowRsiPane(!showRsiPane)}
-              className={`px-1.5 sm:px-2 py-0.5 rounded font-bold transition-colors whitespace-nowrap ${
-                showRsiPane
-                  ? 'bg-purple-500/30 text-purple-300 border border-purple-500/50'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              RSI (14)
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 3. HOVER OHLC TOOLTIP BAR */}
       <div className="px-2.5 sm:px-3.5 py-1 bg-slate-950/90 border-b border-slate-800/60 flex flex-wrap items-center gap-2 sm:gap-3 text-[10px] sm:text-[11px] font-mono text-slate-300 min-h-[24px] sm:min-h-[26px]">
         {hoverData ? (
           <>

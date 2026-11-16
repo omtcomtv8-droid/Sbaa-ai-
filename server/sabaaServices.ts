@@ -1,4 +1,3 @@
-import { GoogleGenAI } from '@google/genai';
 import { CandleBuilder } from './CandleBuilder';
 import { StrategyEngine } from './StrategyEngine';
 import { Candle } from './types';
@@ -45,7 +44,7 @@ export interface SystemAuditLog {
   id: string;
   timestamp: number;
   level: 'INFO' | 'WARN' | 'ERROR' | 'SECURITY';
-  category: 'ORDER' | 'AUTH' | 'DATA' | 'AI' | 'SYSTEM';
+  category: 'ORDER' | 'AUTH' | 'DATA' | 'SYSTEM';
   message: string;
   details?: string;
 }
@@ -54,23 +53,9 @@ export class SabaaService {
   private orders: TradeOrderRecord[] = [];
   private positions: PositionRecord[] = [];
   private auditLogs: SystemAuditLog[] = [];
-  private geminiClient: GoogleGenAI | null = null;
-  private totalAiRequests = 0;
-  private totalVisionRequests = 0;
 
   constructor() {
-    this.initAuditLog('SYSTEM', 'INFO', 'SABAA AI SOLUTION Core Services initialized in Signal-Only Analytical Mode.');
-  }
-
-  private getGemini(): GoogleGenAI | null {
-    if (!this.geminiClient && process.env.GEMINI_API_KEY) {
-      try {
-        this.geminiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      } catch (err) {
-        console.error('[SABAA] Error initializing Gemini client:', err);
-      }
-    }
-    return this.geminiClient;
+    this.initAuditLog('SYSTEM', 'INFO', 'SABAA QUANT Core Services initialized in Algorithmic Signal Engine Mode.');
   }
 
   public logAudit(category: SystemAuditLog['category'], level: SystemAuditLog['level'], message: string, details?: string) {
@@ -180,261 +165,11 @@ export class SabaaService {
     });
   }
 
-  // --- GEMINI AI MARKET ANALYSIS ---
-  public async generateAiAnalysis(params: {
-    symbol: string;
-    timeframe: string;
-    engine: string;
-    candles: Candle[];
-    indicators?: any;
-  }): Promise<any> {
-    this.totalAiRequests++;
-    const gemini = this.getGemini();
-
-    const lastCandle = params.candles[params.candles.length - 1];
-    const currentPrice = lastCandle ? lastCandle.close : 1.085;
-
-    // If Gemini is available, call gemini-3.8-flash
-    if (gemini && process.env.GEMINI_API_KEY) {
-      try {
-        const prompt = `You are the lead institutional quantitative analyst and SMC/ICT market structure strategist for "SABAA AI SOLUTION".
-Analyze the provided market data for asset: ${params.symbol}, Timeframe: ${params.timeframe}, Analysis Methodology: ${params.engine}.
-
-Latest Price: ${currentPrice}
-Recent Candles (last 10):
-${JSON.stringify(params.candles.slice(-10).map((c) => ({ t: c.time, o: c.open, h: c.high, l: c.low, c: c.close })))}
-
-Indicators:
-${JSON.stringify(params.indicators || {})}
-
-Strict Guidelines:
-1. NO binary options terminology (no PUT/CALL, no expiry). Use institutional FX/Crypto terms: BUY/SELL, LONG/SHORT, ORDER BLOCK, FAIR VALUE GAP (FVG), LIQUIDITY SWEEP, BREAK OF STRUCTURE (BOS), CHANGE OF CHARACTER (CHoCH).
-2. Note that all execution is STRICTLY MANUAL by the human trader.
-3. Return output as VALID RAW JSON (no markdown fences, no \`\`\`json) matching this schema:
-{
-  "marketBias": "STRONG_BULLISH" | "BULLISH" | "NEUTRAL" | "BEARISH" | "STRONG_BEARISH",
-  "score": number between -10 and +10,
-  "structure": string describing current structure (e.g., "Bullish BOS above 1.0850"),
-  "liquidityZones": [string],
-  "orderBlocks": [string],
-  "fairValueGaps": [string],
-  "tradeRecommendation": {
-    "direction": "BUY" | "SELL" | "WAIT",
-    "entryZone": string,
-    "stopLoss": string,
-    "target": string,
-    "riskReward": string
-  },
-  "commentary": string in Arabic (professional institutional Arabic tone)
-}`;
-
-        const response = await gemini.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: prompt,
-        });
-
-        const rawText = response.text || '';
-        const cleaned = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-        const parsed = JSON.parse(cleaned);
-
-        this.logAudit('AI', 'INFO', `Gemini 3.8 Flash Analysis Generated for ${params.symbol} (${params.engine})`);
-
-        return {
-          id: 'AI-' + crypto.randomUUID().slice(0, 8).toUpperCase(),
-          timestamp: Date.now(),
-          symbol: params.symbol,
-          timeframe: params.timeframe,
-          engine: params.engine,
-          ...parsed,
-        };
-      } catch (err: any) {
-        console.error('[SABAA] Gemini API error, falling back to deterministic analytical model:', err.message);
-      }
-    }
-
-    // High-precision deterministic fallback
-    const rsi = params.indicators?.rsi ?? 50;
-    const ema9 = params.indicators?.ema9;
-    const ema21 = params.indicators?.ema21;
-    const isBull = (ema9 && ema21 ? ema9 > ema21 : false) || rsi > 52;
-    const isBear = (ema9 && ema21 ? ema9 < ema21 : false) || rsi < 48;
-
-    const bias = isBull ? 'BULLISH' : isBear ? 'BEARISH' : 'NEUTRAL';
-    const score = isBull ? 6.5 : isBear ? -6.5 : 0;
-    const direction = isBull ? 'BUY' : isBear ? 'SELL' : 'WAIT';
-
-    const p = currentPrice;
-    const sl = isBull ? (p * 0.997).toFixed(5) : (p * 1.003).toFixed(5);
-    const tp = isBull ? (p * 1.006).toFixed(5) : (p * 0.994).toFixed(5);
-
-    this.logAudit('AI', 'INFO', `Deterministic Algorithmic Analysis Generated for ${params.symbol}`);
-
-    return {
-      id: 'AI-' + crypto.randomUUID().slice(0, 8).toUpperCase(),
-      timestamp: Date.now(),
-      symbol: params.symbol,
-      timeframe: params.timeframe,
-      engine: params.engine,
-      marketBias: bias,
-      score,
-      structure: isBull
-        ? `كسر هيكلي صاعد (BOS) مدعوم بتمركز سيولة صاعدة فوق مستوى ${(p * 0.998).toFixed(5)}`
-        : isBear
-        ? `كسر هيكلي هابط (BOS) مع سحب سيولة من القمم عند ${(p * 1.002).toFixed(5)}`
-        : 'نطاق تذبذب وتجميع مؤسسي متوازن (Consolidation Zone)',
-      liquidityZones: [
-        `منطقة سيولة الشراء (Buy-Side Liquidity): ${(p * 1.004).toFixed(5)}`,
-        `منطقة سيولة البيع (Sell-Side Liquidity): ${(p * 0.996).toFixed(5)}`,
-      ],
-      orderBlocks: [
-        isBull
-          ? `كتلة أوامر شرائية مؤسسية (Bullish OB): ${(p * 0.9985).toFixed(5)} - ${(p * 0.9975).toFixed(5)}`
-          : `كتلة أوامر بيعية مؤسسية (Bearish OB): ${(p * 1.0015).toFixed(5)} - ${(p * 1.0025).toFixed(5)}`,
-      ],
-      fairValueGaps: [
-        `فجوة قيمة عادلة (FVG): ${(p * (isBull ? 0.999 : 1.001)).toFixed(5)} غير مغطاة بالكامل`,
-      ],
-      tradeRecommendation: {
-        direction,
-        entryZone: `${(p * (isBull ? 0.9995 : 1.0005)).toFixed(5)} - ${p.toFixed(5)}`,
-        stopLoss: sl,
-        target: tp,
-        riskReward: '1:2.0',
-      },
-      commentary:
-        `التحليل المؤسسي لزوج ${params.symbol} يُظهر تحرك السعر وفق نموذج ${params.engine}. ` +
-        (isBull
-          ? `تم رصد ضغط شرائي متزايد مع استقرار التداول أعلى المتوسطات المتحركة، مما يرجح استهداف مستويات السيولة العليا عند ${tp}. يوصى بانتظار إعادة اختبار كتلة الأوامر قبل اتخاذ قرار يدوي بالدخول.`
-          : isBear
-          ? `يتحرك السعر في مسار هابط عقب سحب سيولة القمم، مع تكون مناطق عدم توازن سعري (FVG). يرجى الالتزام الصارم بوقف الخسارة عند ${sl}.`
-          : 'السوق في حالة توازن مؤقت داخل نطاق عرضي. يفضل ترقب اختراق حقيقي مع تأكيد إغلاق شمعة قبل اتخاذ أي قرار.'),
-    };
-  }
-
-  // --- COMPUTER VISION CHART ANALYSIS ---
-  public async analyzeChartVision(params: {
-    imageBase64: string;
-    mimeType: string;
-    prompt?: string;
-  }): Promise<any> {
-    this.totalVisionRequests++;
-    const gemini = this.getGemini();
-
-    const cleanBase64 = params.imageBase64.includes('base64,')
-      ? params.imageBase64.split('base64,')[1]
-      : params.imageBase64;
-
-    if (gemini && process.env.GEMINI_API_KEY) {
-      try {
-        const systemPrompt = `You are the Computer Vision Market Specialist for SABAA AI SOLUTION.
-Analyze the provided financial chart image.
-Extract:
-1. Detected Trend (BULLISH, BEARISH, or NEUTRAL)
-2. Recognised Chart & Candlestick Patterns (e.g., Double Top, Bull Flag, Order Block, FVG, Liquidity Pool, Head & Shoulders)
-3. Key Support & Resistance Price Levels detected from the image
-4. Order Blocks and zones
-5. Advisory trade setup (Direction: BUY/SELL, suggested entry, stop loss, take profit, Risk:Reward ratio)
-6. Comprehensive institutional technical commentary in Arabic.
-
-Strict Guidelines:
-- Do NOT output any markdown ticks or wrappers like \`\`\`json. Return pure JSON only.
-- Output JSON format:
-{
-  "trend": "BULLISH" | "BEARISH" | "NEUTRAL",
-  "confidence": number (1 to 100),
-  "patterns": ["pattern 1", "pattern 2"],
-  "supportResistance": [
-    { "price": number, "type": "SUPPORT" | "RESISTANCE" }
-  ],
-  "orderBlocks": [
-    { "type": "BULLISH" | "BEARISH", "zone": "string" }
-  ],
-  "fairValueGaps": ["string"],
-  "suggestedSetup": {
-    "direction": "BUY" | "SELL",
-    "entry": number,
-    "stopLoss": number,
-    "takeProfit": number,
-    "rrRatio": number,
-    "rationale": "Arabic explanation"
-  },
-  "fullReport": "Comprehensive Arabic technical explanation of what is visually visible on the chart"
-}`;
-
-        const response = await gemini.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: [
-            {
-              inlineData: {
-                data: cleanBase64,
-                mimeType: params.mimeType || 'image/png',
-              },
-            },
-            {
-              text: systemPrompt + '\nUser Note: ' + (params.prompt || 'Analyze this chart thoroughly.'),
-            },
-          ],
-        });
-
-        const rawText = response.text || '';
-        const cleaned = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-        const parsed = JSON.parse(cleaned);
-
-        this.logAudit('AI', 'INFO', 'Gemini Vision Chart Analysis Processed Successfully');
-
-        return {
-          id: 'VIS-' + crypto.randomUUID().slice(0, 8).toUpperCase(),
-          timestamp: Date.now(),
-          ...parsed,
-        };
-      } catch (err: any) {
-        console.error('[SABAA] Gemini Vision error, falling back to vision pattern engine:', err.message);
-      }
-    }
-
-    // Vision Fallback
-    this.logAudit('AI', 'INFO', 'Vision Analysis generated with internal technical heuristics');
-    return {
-      id: 'VIS-' + crypto.randomUUID().slice(0, 8).toUpperCase(),
-      timestamp: Date.now(),
-      trend: 'BULLISH',
-      confidence: 86,
-      patterns: [
-        'نموذج قاع مزدوج (Double Bottom Pattern) واضح المعالم',
-        'اختراق خط الاتجاه الهابط الرئيسي (Trendline Breakout)',
-        'تكون شمعة ابتلاعية شرائية (Bullish Engulfing Candle)',
-      ],
-      supportResistance: [
-        { price: 1.0825, type: 'SUPPORT' },
-        { price: 1.089, type: 'RESISTANCE' },
-        { price: 1.094, type: 'RESISTANCE' },
-      ],
-      orderBlocks: [
-        { type: 'BULLISH', zone: '1.0820 - 1.0835 (منطقة شراء مؤسسي تم التحقق منها)' },
-      ],
-      fairValueGaps: [
-        'فجوة سعرية غير ممتلئة (FVG) بين مستويات 1.0840 و 1.0855',
-      ],
-      suggestedSetup: {
-        direction: 'BUY',
-        entry: 1.0845,
-        stopLoss: 1.0815,
-        takeProfit: 1.0915,
-        rrRatio: 2.33,
-        rationale: 'ارتداد مؤكد من منطقة الدعم وكسر خط العنق للنموذج الانعكاسي مع أحجام تداول شرائية متصاعدة.',
-      },
-      fullReport:
-        'أظهر الفحص البصري للشارت المرفوع تشكل تركيبة انعكاسية إيجابية بعد مسار هابط سابق. ' +
-        'الشموع الأخيرة تشير إلى امتصاص قوي للسيولة البيعية حول مستويات الدعم، تلاها كسر صاعد لخط العنق مصحوبًا بزيادة ملحوظة في الزخم. ' +
-        'تعد هذه القراءة استئناسية وفنية لمساعدة المتداول في اتخاذ قراره اليدوي مع التشديد على إدارة المخاطر وتحديد وقف الخسارة بدقة.',
-    };
-  }
-
   // --- SYSTEM HEALTH TELEMETRY ---
   public getHealthTelemetry(activeSocketsCount: number, memoryUsage: NodeJS.MemoryUsage) {
     return {
       status: 'OPERATIONAL',
-      serviceName: 'SABAA AI SOLUTION Backend Gateway',
+      serviceName: 'SABAA QUANT Backend Gateway',
       uptimeSeconds: Math.floor(process.uptime()),
       activeSockets: activeSocketsCount,
       memory: {
@@ -445,11 +180,8 @@ Strict Guidelines:
       stats: {
         totalOrders: this.orders.length,
         openPositions: this.positions.length,
-        totalAiRequests: this.totalAiRequests,
-        totalVisionRequests: this.totalVisionRequests,
         auditLogsStored: this.auditLogs.length,
       },
-      geminiApiConfigured: Boolean(process.env.GEMINI_API_KEY),
       nodeVersion: process.version,
     };
   }
