@@ -30,6 +30,8 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@firebase/eslint-plugin-security-rules": "^0.0.2",
     "@tailwindcss/vite": "^4.3.3",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^4.17.21",
@@ -40,6 +42,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.28.0",
+    "eslint": "^10.15.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~5.8.2",
     "vite": "^8.3.0"

@@ -4,7 +4,6 @@ import {
   Activity,
   Server,
   Cpu,
-  Brain,
   FileText,
   RefreshCw,
   CheckCircle2,
@@ -27,13 +26,13 @@ export const AdminPanel: React.FC = () => {
   const fetchAdminData = async () => {
     try {
       const [hRes, lRes] = await Promise.all([
-        fetch('/api/admin/health'),
-        fetch('/api/admin/logs'),
+        fetch('/api/telemetry/health'),
+        fetch('/api/telemetry/logs'),
       ]);
       if (hRes.ok) setHealth(await hRes.json());
       if (lRes.ok) setLogs(await lRes.json());
     } catch (err) {
-      console.error('Admin telemetry fetch failed:', err);
+      console.error('Telemetry fetch failed:', err);
     } finally {
       setIsLoading(false);
     }
@@ -73,7 +72,7 @@ export const AdminPanel: React.FC = () => {
               </span>
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              مراقبة الخوادم اللحظية، واستهلاك الذاكرة، وطلبات الذكاء الاصطناعي، وسجل تدقيق العمليات والأمان.
+              مراقبة الخوادم اللحظية، واستهلاك الذاكرة، وأداء المحرك الكمي، وسجل تدقيق العمليات والأمان.
             </p>
           </div>
         </div>
@@ -114,15 +113,15 @@ export const AdminPanel: React.FC = () => {
           </div>
 
           <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1">
-            <span className="text-slate-400 font-sans block text-[11px]">محرك الذكاء الاصطناعي (Gemini):</span>
+            <span className="text-slate-400 font-sans block text-[11px]">المحرك الكمي وسجلات النظام:</span>
             <div className="flex items-center gap-2">
-              <Brain className="w-4 h-4 text-amber-400" />
-              <span className="text-slate-200 font-bold">
-                {health.geminiApiConfigured ? 'مفعل وجاهز' : 'وضع المحاكاة الخوارزمية'}
+              <Cpu className="w-4 h-4 text-amber-400" />
+              <span className="text-emerald-400 font-bold">
+                نشط ({health.nodeVersion || 'Node.js'})
               </span>
             </div>
             <div className="text-[10px] text-slate-400 font-sans">
-              AI: {health.stats.totalAiRequests} | Vision: {health.stats.totalVisionRequests}
+              السجلات المحفوظة: {health.stats?.auditLogsStored ?? logs.length}
             </div>
           </div>
         </div>

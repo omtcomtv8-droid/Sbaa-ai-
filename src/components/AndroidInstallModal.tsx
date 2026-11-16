@@ -84,7 +84,7 @@ export const AndroidInstallModal: React.FC<AndroidInstallModalProps> = ({ isOpen
             </div>
             <div>
               <h3 className="text-base sm:text-lg font-black text-slate-100 flex items-center gap-2">
-                <span>تثبيت تطبيق SABAA AI على الهاتف</span>
+                <span>تثبيت تطبيق SABAA QUANT على الهاتف</span>
                 <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold">
                   بدون أخطاء حزم
                 </span>
@@ -307,7 +307,7 @@ export const AndroidInstallModal: React.FC<AndroidInstallModalProps> = ({ isOpen
                     2
                   </span>
                   <div>
-                    اضغط على أيقونة التثبيت أو افتح القائمة (⋮) واضغط <strong>&quot;تثبيت SABAA AI SOLUTION&quot;</strong>.
+                    اضغط على أيقونة التثبيت أو افتح القائمة (⋮) واضغط <strong>&quot;تثبيت SABAA QUANT PRO&quot;</strong>.
                   </div>
                 </div>
               </div>
@@ -356,7 +356,7 @@ export const AndroidInstallModal: React.FC<AndroidInstallModalProps> = ({ isOpen
 
         {/* Footer */}
         <div className="p-3.5 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-          <span className="font-mono text-[11px] text-slate-500">SABAA AI SOLUTION • v1.0.0</span>
+          <span className="font-mono text-[11px] text-slate-500">SABAA QUANT PRO • v1.0.0</span>
           <button
             onClick={onClose}
             className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold transition-colors cursor-pointer"

@@ -51,7 +51,7 @@ export const AppUpdateDialog: React.FC<AppUpdateDialogProps> = ({ versionInfo, i
                 )}
               </div>
               <h3 className="text-lg font-black text-slate-100 mt-0.5">
-                SABAA AI SOLUTION v{versionInfo.versionName}
+                SABAA QUANT PRO v{versionInfo.versionName}
               </h3>
             </div>
           </div>

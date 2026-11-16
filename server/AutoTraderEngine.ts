@@ -25,6 +25,38 @@ export interface AutoTraderConfig {
   maxConcurrentTrades: number; // e.g. 1
   cooldownBetweenTradesSec: number; // e.g. 30
   minSignalStrength?: number; // Minimum confidence threshold
+  displayTimezone?: string;   // Browser IANA timezone for accurate local HH:mm:ss alerts
+}
+
+export interface AutoTraderTelegramNotifier {
+  broadcastAutoTradeOpened(trade: {
+    asset: string;
+    action: 'call' | 'put';
+    amount: number;
+    entryTimestampMs: number;
+    durationSeconds: number;
+    openPrice?: number;
+    strategy: string;
+    ticketId?: string;
+    tradeId?: string;
+    reason?: string;
+    displayTimezone?: string;
+  }): Promise<{ success: boolean; error?: string }>;
+  broadcastAutoTradeClosed(trade: {
+    asset: string;
+    action: 'call' | 'put';
+    amount: number;
+    profit: number;
+    entryTimestampMs: number;
+    closeTimestampMs: number;
+    openPrice?: number;
+    closePrice?: number;
+    strategy?: string;
+    ticketId?: string;
+    dailyPnL?: number;
+    displayTimezone?: string;
+  }): Promise<{ success: boolean; error?: string }>;
+  setDisplayTimezone?(timeZone?: string): void;
 }
 
 export interface AutoTraderLog {
@@ -133,6 +165,7 @@ export interface BacktestReport {
 }
 
 const STATE_FILE_PATH = path.resolve(process.cwd(), '.data', 'bot_state.json');
+const TRADES_FILE_PATH = path.resolve(process.cwd(), '.data', 'autotrader_trades.json');
 
 export class AutoTraderEngine {
   private config: AutoTraderConfig = {
@@ -174,6 +207,7 @@ export class AutoTraderEngine {
   private currentMartingaleStep: number = 0;
   private isExecutingTrade: boolean = false;
   private lastTradeSignalTime: number = 0;
+  private statsDate: string = new Date().toISOString().slice(0, 10);
 
   // Order idempotency and deal closure deduplication cache
   private processedOrderTokens = new Set<string>();
@@ -188,6 +222,7 @@ export class AutoTraderEngine {
   private candleBuilder?: any;
   private marketDataStore?: any;
   private persistToDisk: boolean = true;
+  private telegramNotifier?: AutoTraderTelegramNotifier;
 
   constructor(
     private strategyEngine: StrategyEngine,
@@ -197,12 +232,14 @@ export class AutoTraderEngine {
     _reserved?: unknown,
     candleBuilder?: any,
     persistToDisk: boolean = true,
-    marketDataStore?: any
+    marketDataStore?: any,
+    telegramNotifier?: AutoTraderTelegramNotifier
   ) {
     this.onBroadcast = onBroadcast;
     this.candleBuilder = candleBuilder;
     this.persistToDisk = persistToDisk;
     this.marketDataStore = marketDataStore;
+    this.telegramNotifier = telegramNotifier;
 
     // Load persisted state across server restarts (Rule 16)
     this.loadPersistedState();
@@ -234,11 +271,19 @@ export class AutoTraderEngine {
     this.marketDataStore = marketDataStore;
   }
 
+  public setTelegramNotifier(notifier: AutoTraderTelegramNotifier) {
+    this.telegramNotifier = notifier;
+    if (this.config.displayTimezone) {
+      this.telegramNotifier.setDisplayTimezone?.(this.config.displayTimezone);
+    }
+  }
+
   public setBroadcastHandler(handler: (event: string, data: any) => void) {
     this.onBroadcast = handler;
   }
 
   public getStatus() {
+    this.ensureDailyRollover();
     this.reconcileActiveTrades();
     const now = Date.now();
     const restRemainingSec = this.isInRestBreak && this.restBreakUntil > now
@@ -288,7 +333,7 @@ export class AutoTraderEngine {
         balance: brokerDiag?.account?.balance ?? null,
         isDemo: brokerDiag?.account?.isDemo ?? false,
       },
-      recentTrades: this.trades.slice(-25).reverse(),
+      recentTrades: this.trades.slice().reverse(),
       recentLogs: this.logs.slice(-40).reverse(),
     };
   }
@@ -453,6 +498,8 @@ export class AutoTraderEngine {
       };
     }
 
+    this.ensureDailyRollover();
+
     if (userConfig) {
       const sanitizedConfig: any = { ...userConfig };
       delete sanitizedConfig.aiCode;
@@ -468,12 +515,16 @@ export class AutoTraderEngine {
         isDemo: false,
         maxAmount: Math.max(sanitizedConfig.maxAmount || 1000.0, sanitizedConfig.baseAmount || this.config.baseAmount || 1.0, 1000.0),
       };
+      if (this.config.displayTimezone) {
+        this.telegramNotifier?.setDisplayTimezone?.(this.config.displayTimezone);
+      }
+      this.recheckCircuitBreakerAfterConfigChange();
     }
 
     if (this.circuitBreakerTripped) {
       return {
         success: false,
-        message: `لا يمكن التشغيل: قاطع الدائرة مفعل (${this.circuitBreakerReason}). يرجى تصفير الإحصاءات اليومية للمتابعة.`,
+        message: `لا يمكن التشغيل: قاطع الدائرة مفعل (${this.circuitBreakerReason}). اضغط على "فك القاطع وتصفير اليوم" للمتابعة.`,
       };
     }
 
@@ -548,6 +599,60 @@ export class AutoTraderEngine {
     return { success: true, message: 'تم تصفير الإحصاءات بنجاح' };
   }
 
+  public clearTradeList(): {
+    success: boolean;
+    clearedCount: number;
+    remainingActiveCount: number;
+    message: string;
+  } {
+    this.reconcileActiveTrades();
+    const beforeCount = this.trades.length;
+    this.trades = this.trades.filter((t) => TradeLifecycleManager.isActive(t.lifecycle));
+    const clearedCount = beforeCount - this.trades.length;
+    const remainingActiveCount = this.trades.length;
+
+    if (clearedCount > 0) {
+      this.addLog(
+        'SYSTEM',
+        'info',
+        `🗑️ تم مسح ${clearedCount} صفقة من قائمة الأوامر المنفذة${remainingActiveCount > 0 ? ` (مع الإبقاء على ${remainingActiveCount} صفقة جارية)` : ''}.`
+      );
+    } else if (remainingActiveCount > 0) {
+      this.addLog(
+        'SYSTEM',
+        'info',
+        `⏳ لا توجد صفقات منتهية لمسحها حالياً؛ هناك ${remainingActiveCount} صفقة جارية.`
+      );
+    }
+
+    this.persistState();
+    this.notifyStatusChange();
+    return {
+      success: true,
+      clearedCount,
+      remainingActiveCount,
+      message:
+        clearedCount > 0
+          ? remainingActiveCount > 0
+            ? `تم مسح ${clearedCount} صفقة منتهية والإبقاء على ${remainingActiveCount} صفقة جارية`
+            : `تم مسح قائمة الصفقات (${clearedCount} صفقة) بنجاح`
+          : remainingActiveCount > 0
+          ? `توجد ${remainingActiveCount} صفقة جارية لا يمكن مسحها قبل الإغلاق`
+          : 'قائمة الصفقات فارغة بالفعل',
+    };
+  }
+
+  public clearLogs(): { success: boolean; clearedCount: number; message: string } {
+    const clearedCount = this.logs.length;
+    this.logs = [];
+    this.notifyStatusChange();
+    return {
+      success: true,
+      clearedCount,
+      message: clearedCount > 0 ? `تم مسح سجل العمليات (${clearedCount} حدث)` : 'السجل فارغ بالفعل',
+    };
+  }
+
   public saveSettings(newConfig: Partial<AutoTraderConfig>): { success: boolean; message: string } {
     const sanitizedConfig: any = { ...newConfig };
     delete sanitizedConfig.aiCode;
@@ -567,10 +672,45 @@ export class AutoTraderEngine {
     if (sanitizedConfig.timeframe) {
       this.config.timeframe = sanitizedConfig.timeframe;
     }
+    if (this.config.displayTimezone) {
+      this.telegramNotifier?.setDisplayTimezone?.(this.config.displayTimezone);
+    }
+    this.recheckCircuitBreakerAfterConfigChange();
     this.addLog('SYSTEM', 'info', `💾 تم حفظ إعدادات البوت بنجاح (الاستراتيجية: ${this.config.strategyId}, المبلغ: $${this.config.baseAmount}, الفريم: ${this.config.timeframe}s)`);
     this.persistState();
     this.notifyStatusChange();
     return { success: true, message: 'تم حفظ الإعدادات بنجاح' };
+  }
+
+  private recheckCircuitBreakerAfterConfigChange(): void {
+    if (!this.circuitBreakerTripped) return;
+    const withinLossLimit = this.dailyPnL > -Math.abs(this.config.stopLoss);
+    const withinProfitLimit = this.dailyPnL < Math.abs(this.config.takeProfit);
+    if (withinLossLimit && withinProfitLimit) {
+      this.circuitBreakerTripped = false;
+      this.circuitBreakerReason = '';
+      this.addLog('RISK', 'info', '🔓 تم فك قاطع الدائرة تلقائياً بعد تحديث حدود المخاطر.');
+    }
+  }
+
+  private ensureDailyRollover(): void {
+    const today = new Date().toISOString().slice(0, 10);
+    if (this.statsDate && this.statsDate !== today) {
+      this.statsDate = today;
+      this.dailyPnL = 0;
+      this.totalTrades = 0;
+      this.winningTrades = 0;
+      this.losingTrades = 0;
+      this.drawTrades = 0;
+      this.circuitBreakerTripped = false;
+      this.circuitBreakerReason = '';
+      this.consecutiveTradesCount = 0;
+      this.currentMartingaleStep = 0;
+      this.addLog('RISK', 'info', `🌅 بداية يوم تداول جديد (${today}): تم تصفير عدادات اليوم وفك قاطع الدائرة تلقائياً.`);
+      this.persistState();
+    } else if (!this.statsDate) {
+      this.statsDate = today;
+    }
   }
 
   public setTimeframe(timeframe: number): void {
@@ -1378,6 +1518,12 @@ export class AutoTraderEngine {
 
       if (result.success && result.deal) {
         const ticketId = String(result.deal.id || result.requestId || '');
+        const rawOpenTs = Number(result.deal.openTime || 0);
+        const realEntryMs = rawOpenTs > 0
+          ? (rawOpenTs > 1e11 ? rawOpenTs : rawOpenTs * 1000)
+          : Date.now();
+        tradeRecord.timestamp = realEntryMs;
+
         this.totalTrades++;
         this.consecutiveTradesCount++;
 
@@ -1393,6 +1539,30 @@ export class AutoTraderEngine {
         });
 
         this.addLog('ORDER', 'success', `[OPEN] الصفقة مفتوحة ونشطة بنجاح! تذكرة #${ticketId} | سعر الفتح: ${result.deal.openPrice || 'جارٍ'}`);
+
+        // Forward real executed automated trade to the user's linked Telegram Bot
+        if (this.telegramNotifier) {
+          this.telegramNotifier
+            .broadcastAutoTradeOpened({
+              asset: targetAsset,
+              action,
+              amount: finalAmount,
+              entryTimestampMs: realEntryMs,
+              durationSeconds: targetTime,
+              openPrice: result.deal.openPrice ? Number(result.deal.openPrice) : undefined,
+              strategy: strategyName || this.config.strategyId,
+              ticketId,
+              tradeId,
+              reason,
+              displayTimezone: this.config.displayTimezone,
+            })
+            .then((tgRes) => {
+              if (tgRes?.success) {
+                this.addLog('ORDER', 'info', `📨 تم إرسال تفاصيل الصفقة (${targetAsset} ${action.toUpperCase()}) إلى بوت التلجرام المربوط.`);
+              }
+            })
+            .catch(() => {});
+        }
 
         // Check if it's time for a Human Rest Break (after specified consecutive trades)
         if (this.consecutiveTradesCount >= this.config.tradesBeforeRest) {
@@ -1492,6 +1662,29 @@ export class AutoTraderEngine {
           status: isWin ? 'WON' : isDraw ? 'DRAW' : 'LOST',
         });
       }
+
+      if (this.telegramNotifier) {
+        const rawCloseTs = Number(deal.closeTime || 0);
+        const closeTimestampMs = rawCloseTs > 0
+          ? (rawCloseTs > 1e11 ? rawCloseTs : rawCloseTs * 1000)
+          : Date.now();
+        this.telegramNotifier
+          .broadcastAutoTradeClosed({
+            asset: matchingTrade.asset,
+            action: matchingTrade.action,
+            amount: matchingTrade.amount,
+            profit,
+            entryTimestampMs: matchingTrade.timestamp,
+            closeTimestampMs,
+            openPrice: matchingTrade.openPrice || (deal.openPrice ? Number(deal.openPrice) : undefined),
+            closePrice: deal.closePrice ? Number(deal.closePrice) : undefined,
+            strategy: matchingTrade.strategy,
+            ticketId: matchingTrade.ticketId || dealId,
+            dailyPnL: Number(this.dailyPnL.toFixed(2)),
+            displayTimezone: this.config.displayTimezone,
+          })
+          .catch(() => {});
+      }
     }
 
     // Check risk limits after deal closed
@@ -1553,9 +1746,11 @@ export class AutoTraderEngine {
         losingTrades: this.losingTrades,
         circuitBreakerTripped: this.circuitBreakerTripped,
         circuitBreakerReason: this.circuitBreakerReason,
+        statsDate: this.statsDate,
         savedAt: new Date().toISOString(),
       };
       fs.writeFileSync(STATE_FILE_PATH, JSON.stringify(stateData, null, 2), 'utf-8');
+      fs.writeFileSync(TRADES_FILE_PATH, JSON.stringify(this.trades.slice(-500), null, 2), 'utf-8');
     } catch (err) {
       console.error('[AutoTraderEngine] Error persisting state:', err);
     }
@@ -1583,6 +1778,15 @@ export class AutoTraderEngine {
             maxAmount: Math.max(1000.0, Number(loaded.maxAmount) || 1000.0, Number(loaded.baseAmount) || 1.0),
           };
         }
+        const today = new Date().toISOString().slice(0, 10);
+        const persistedDate =
+          typeof data.statsDate === 'string'
+            ? data.statsDate
+            : typeof data.savedAt === 'string'
+            ? data.savedAt.slice(0, 10)
+            : today;
+        this.statsDate = persistedDate;
+
         this.dailyPnL = data.dailyPnL ?? 0;
         this.totalTrades = data.totalTrades ?? 0;
         this.winningTrades = data.winningTrades ?? 0;
@@ -1592,7 +1796,17 @@ export class AutoTraderEngine {
         this.isEmergencyStopped = Boolean(data.isEmergencyStopped);
         // By safety default, bot is stopped on server restart until explicitly resumed
         this.isRunning = false;
+        this.ensureDailyRollover();
         console.log('[AutoTraderEngine] Restored persisted bot state and config from disk.');
+      }
+
+      if (fs.existsSync(TRADES_FILE_PATH)) {
+        const tradesRaw = fs.readFileSync(TRADES_FILE_PATH, 'utf-8');
+        const parsedTrades = JSON.parse(tradesRaw);
+        if (Array.isArray(parsedTrades)) {
+          this.trades = parsedTrades.slice(-500);
+          console.log(`[AutoTraderEngine] Restored ${this.trades.length} persisted trades from disk.`);
+        }
       }
     } catch (err) {
       console.warn('[AutoTraderEngine] Could not load persisted state, starting fresh.');

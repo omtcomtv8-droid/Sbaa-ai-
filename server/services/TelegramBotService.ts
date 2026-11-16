@@ -10,6 +10,8 @@ export interface TelegramConfig {
   botFirstName?: string;
   enabled: boolean;
   autoBroadcastSignals: boolean;
+  autoBroadcastTrades?: boolean;
+  displayTimezone?: string;
   minConfidence: number; // Minimum confidence percentage (e.g. 70)
   lastTestStatus?: 'SUCCESS' | 'FAILED' | 'IDLE';
   lastTestMessage?: string;
@@ -89,6 +91,8 @@ export class TelegramBotService {
       botUsername: process.env.TELEGRAM_BOT_USERNAME || 'SabaaTradingBot',
       enabled: Boolean(process.env.TELEGRAM_BOT_TOKEN),
       autoBroadcastSignals: true,
+      autoBroadcastTrades: true,
+      displayTimezone: process.env.TZ || '',
       minConfidence: 70,
       lastTestStatus: 'IDLE',
       broadcastCount: 0,
@@ -99,7 +103,11 @@ export class TelegramBotService {
       if (fs.existsSync(p)) {
         const raw = fs.readFileSync(p, 'utf8');
         const parsed = JSON.parse(raw);
-        return { ...defaultCfg, ...parsed };
+        return {
+          ...defaultCfg,
+          ...parsed,
+          autoBroadcastTrades: parsed.autoBroadcastTrades !== undefined ? Boolean(parsed.autoBroadcastTrades) : true,
+        };
       }
     } catch (e) {
       console.warn('[TelegramBotService] Error reading config file:', e);
@@ -109,10 +117,24 @@ export class TelegramBotService {
   }
 
   public saveConfig(newConfig: Partial<TelegramConfig>): TelegramConfig {
-    this.config = {
+    const merged: TelegramConfig = {
       ...this.config,
       ...newConfig,
     };
+
+    // If user linked/updated botToken or chatId without explicitly passing enabled=false, enable automatically
+    if (
+      newConfig.enabled === undefined &&
+      Boolean(merged.botToken && merged.chatId) &&
+      (newConfig.botToken !== undefined ||
+        newConfig.chatId !== undefined ||
+        newConfig.autoBroadcastSignals !== undefined ||
+        newConfig.autoBroadcastTrades !== undefined)
+    ) {
+      merged.enabled = true;
+    }
+
+    this.config = merged;
 
     try {
       const p = this.getConfigFilePath();
@@ -225,12 +247,11 @@ export class TelegramBotService {
       const isAuth = po.isAuthVerified();
       const acc = po.getDiagnostics()?.account;
       if (isAuth && acc?.balance !== null && acc?.balance !== undefined && !isNaN(acc.balance)) {
-        const mode = acc.isDemo ? 'DEMO' : 'REAL';
-        brokerText = `\n💼 <b>حساب الوسيط:</b> متصل وموثق\n💰 <b>الرصيد:</b> $${Number(acc.balance).toFixed(2)} (${mode})\n`;
+        brokerText = `\n💼 <b>حساب الوسيط:</b> متصل وموثق\n💰 <b>الرصيد:</b> $${Number(acc.balance).toFixed(2)} (REAL)\n`;
       }
     }
 
-    const testMsg = `<b>⚡️ تجربة اتصال بوت التلجرام - SABAA AI</b>\n\n` +
+    const testMsg = `<b>⚡️ تجربة اتصال بوت التلجرام - SABAA QUANT</b>\n\n` +
       `✅ تم التحقق من ربط بوت التلجرام بنجاح مع غرفة توليد المفاتيح ومنصة التداول!\n` +
       brokerText +
       `🕒 <b>التوقيت:</b> ${new Date().toLocaleString()}\n` +
@@ -257,6 +278,68 @@ export class TelegramBotService {
     }
   }
 
+  private formatExactTime(
+    timestampMs: number,
+    preferredTimeZone?: string
+  ): { timeStr: string; dateStr: string; tzSuffix: string } {
+    const safeMs = Number.isFinite(timestampMs) && timestampMs > 0 ? timestampMs : Date.now();
+    const date = new Date(safeMs);
+    const candidateTz = (preferredTimeZone || this.config.displayTimezone || '').trim();
+
+    if (candidateTz) {
+      try {
+        const timeStr = new Intl.DateTimeFormat('en-GB', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+          timeZone: candidateTz,
+        }).format(date);
+        const dateStr = new Intl.DateTimeFormat('en-CA', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          timeZone: candidateTz,
+        }).format(date);
+        return { timeStr, dateStr, tzSuffix: '' };
+      } catch {
+        // Fallback below if timezone identifier is invalid
+      }
+    }
+
+    const timeStr = new Intl.DateTimeFormat('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+      timeZone: 'UTC',
+    }).format(date);
+    const dateStr = new Intl.DateTimeFormat('en-CA', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      timeZone: 'UTC',
+    }).format(date);
+    return { timeStr, dateStr, tzSuffix: ' (UTC)' };
+  }
+
+  public setDisplayTimezone(timeZone?: string): void {
+    const clean = typeof timeZone === 'string' ? timeZone.trim() : '';
+    if (!clean || clean === this.config.displayTimezone) return;
+    try {
+      new Intl.DateTimeFormat('en-GB', { timeZone: clean }).format(new Date());
+      this.config.displayTimezone = clean;
+      try {
+        const p = this.getConfigFilePath();
+        fs.writeFileSync(p, JSON.stringify(this.config, null, 2), 'utf8');
+      } catch {
+        // ignore write failure
+      }
+    } catch {
+      // ignore invalid IANA timezone
+    }
+  }
+
   /**
    * Real-time Trading Signal Broadcast to Telegram
    */
@@ -270,9 +353,14 @@ export class TelegramBotService {
     strategy?: string;
     confirmations?: number;
     reasons?: string[];
+    timestamp?: number;
+    displayTimezone?: string;
   }): Promise<{ success: boolean; error?: string }> {
     if (!this.config.enabled || !this.config.botToken || !this.config.chatId) {
       return { success: false, error: 'Telegram broadcasting is disabled or not configured.' };
+    }
+    if (this.config.autoBroadcastSignals === false) {
+      return { success: false, error: 'Auto signal broadcasting is disabled.' };
     }
 
     if (signal.confidence < (this.config.minConfidence || 60)) {
@@ -281,14 +369,16 @@ export class TelegramBotService {
 
     const isCall = signal.type === 'UP';
     const directionIcon = isCall ? '🟢' : '🔴';
-    const directionArabic = isCall ? 'شراء (CALL / UP)' : 'بيع (PUT / DOWN)';
+    const directionArabic = isCall ? 'شراء (CALL / UP ↑)' : 'بيع (PUT / DOWN ↓)';
     const expirySec = signal.expirySeconds || (typeof signal.timeframe === 'number' ? signal.timeframe * 2 : 120);
     const expiryMin = Math.ceil(expirySec / 60);
+    const signalTime = this.formatExactTime(signal.timestamp || Date.now(), signal.displayTimezone);
 
     const messageHtml =
-      `<b>${directionIcon} إشارة تداول خوارزمية جديدة - SABAA AI</b>\n\n` +
+      `<b>${directionIcon} إشارة تداول خوارزمية جديدة - SABAA QUANT</b>\n\n` +
       `📊 <b>الأصل:</b> <code>${signal.asset}</code>\n` +
       `🎯 <b>الاتجاه:</b> <b>${directionArabic}</b>\n` +
+      `🕒 <b>وقت الإشارة:</b> <code>${signalTime.timeStr}</code>${signalTime.tzSuffix}\n` +
       `⚡️ <b>نسبة القوة والتأكيد:</b> <b>${signal.confidence}%</b>\n` +
       `⏱ <b>مدة الصفقة (Expiry):</b> ${expiryMin} دقيقة (${expirySec} ثانية)\n` +
       (signal.price ? `💵 <b>سعر الدخول المقترح:</b> <code>${signal.price}</code>\n` : '') +
@@ -296,6 +386,129 @@ export class TelegramBotService {
       (signal.confirmations ? `🔬 <b>المؤشرات المؤكدة:</b> ${signal.confirmations} استراتيجيات\n` : '') +
       `\n` +
       `🌐 <b>المنصة المعتمدة:</b> منصة الويب المؤسسية نشطة ومتاحة للمشتركين المرخصين.`;
+
+    const result = await this.sendMessage(messageHtml);
+    if (result.success) {
+      this.config.lastBroadcastAt = new Date().toISOString();
+      this.config.broadcastCount = (this.config.broadcastCount || 0) + 1;
+      this.saveConfig({
+        lastBroadcastAt: this.config.lastBroadcastAt,
+        broadcastCount: this.config.broadcastCount,
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Real-time Automated Trade Entry Notification to the User's Linked Telegram Bot
+   */
+  public async broadcastAutoTradeOpened(trade: {
+    asset: string;
+    action: 'call' | 'put';
+    amount: number;
+    entryTimestampMs: number;
+    durationSeconds: number;
+    openPrice?: number;
+    strategy: string;
+    ticketId?: string;
+    tradeId?: string;
+    reason?: string;
+    displayTimezone?: string;
+  }): Promise<{ success: boolean; error?: string; messageId?: number }> {
+    if (!this.config.enabled || !this.config.botToken || !this.config.chatId) {
+      return { success: false, error: 'Telegram bot is not linked or disabled.' };
+    }
+    if (this.config.autoBroadcastTrades === false) {
+      return { success: false, error: 'Auto-trader Telegram notifications disabled.' };
+    }
+
+    const isCall = trade.action === 'call';
+    const icon = isCall ? '🟢' : '🔴';
+    const dirAr = isCall ? 'شراء (CALL ↑)' : 'بيع (PUT ↓)';
+    const entryFormatted = this.formatExactTime(trade.entryTimestampMs, trade.displayTimezone);
+    const expiryMs = trade.entryTimestampMs + Math.max(1, trade.durationSeconds) * 1000;
+    const expiryFormatted = this.formatExactTime(expiryMs, trade.displayTimezone);
+
+    const durationText =
+      trade.durationSeconds >= 60 && trade.durationSeconds % 60 === 0
+        ? `${trade.durationSeconds / 60} دقيقة (${trade.durationSeconds} ثانية)`
+        : `${trade.durationSeconds} ثانية`;
+
+    const messageHtml =
+      `<b>${icon} صفقة تداول آلي جديدة (تنفيذ حقيقي) - SABAA QUANT</b>\n\n` +
+      `📊 <b>اسم الزوج:</b> <code>${trade.asset}</code>\n` +
+      `🎯 <b>الاتجاه:</b> <b>${dirAr}</b>\n` +
+      `🕒 <b>وقت الدخول:</b> <code>${entryFormatted.timeStr}</code>${entryFormatted.tzSuffix}\n` +
+      `⏳ <b>وقت الانتهاء:</b> <code>${expiryFormatted.timeStr}</code>${expiryFormatted.tzSuffix}\n` +
+      `⏱ <b>مدة الصفقة:</b> ${durationText}\n` +
+      `💵 <b>مبلغ الصفقة:</b> <code>$${Number(trade.amount).toFixed(2)}</code>\n` +
+      (trade.openPrice && trade.openPrice > 0 ? `📈 <b>سعر الدخول:</b> <code>${trade.openPrice}</code>\n` : '') +
+      `🧠 <b>الاستراتيجية:</b> ${trade.strategy || 'AutoTrader'}\n` +
+      (trade.ticketId ? `🎫 <b>رقم التذكرة:</b> <code>#${trade.ticketId}</code>\n` : '') +
+      `💼 <b>الحساب:</b> حقيقي (Pocket Option REAL)\n` +
+      `📅 <b>التاريخ:</b> <code>${entryFormatted.dateStr}</code>`;
+
+    const result = await this.sendMessage(messageHtml);
+    if (result.success) {
+      this.config.lastBroadcastAt = new Date().toISOString();
+      this.config.broadcastCount = (this.config.broadcastCount || 0) + 1;
+      this.saveConfig({
+        lastBroadcastAt: this.config.lastBroadcastAt,
+        broadcastCount: this.config.broadcastCount,
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Real-time Automated Trade Settlement Result Notification
+   */
+  public async broadcastAutoTradeClosed(trade: {
+    asset: string;
+    action: 'call' | 'put';
+    amount: number;
+    profit: number;
+    entryTimestampMs: number;
+    closeTimestampMs: number;
+    openPrice?: number;
+    closePrice?: number;
+    strategy?: string;
+    ticketId?: string;
+    dailyPnL?: number;
+    displayTimezone?: string;
+  }): Promise<{ success: boolean; error?: string; messageId?: number }> {
+    if (!this.config.enabled || !this.config.botToken || !this.config.chatId) {
+      return { success: false, error: 'Telegram bot is not linked or disabled.' };
+    }
+    if (this.config.autoBroadcastTrades === false) {
+      return { success: false, error: 'Auto-trader Telegram notifications disabled.' };
+    }
+
+    const profit = Number(trade.profit) || 0;
+    const isWin = profit > 0;
+    const isDraw = profit === 0;
+    const statusHeader = isWin
+      ? `🏆 صفقة رابحة (+$${profit.toFixed(2)})`
+      : isDraw
+      ? `⚖️ صفقة متعادلة ($0.00)`
+      : `📉 صفقة خاسرة (-$${Math.abs(profit).toFixed(2)})`;
+    const dirAr = trade.action === 'call' ? 'شراء (CALL ↑)' : 'بيع (PUT ↓)';
+    const entryFormatted = this.formatExactTime(trade.entryTimestampMs, trade.displayTimezone);
+    const closeFormatted = this.formatExactTime(trade.closeTimestampMs, trade.displayTimezone);
+
+    const messageHtml =
+      `<b>${statusHeader}</b>\n\n` +
+      `📊 <b>اسم الزوج:</b> <code>${trade.asset}</code>\n` +
+      `🎯 <b>الاتجاه:</b> <b>${dirAr}</b>\n` +
+      `🕒 <b>الدخول:</b> <code>${entryFormatted.timeStr}</code> ⬅️ <b>الإغلاق:</b> <code>${closeFormatted.timeStr}</code>${closeFormatted.tzSuffix}\n` +
+      `💵 <b>المبلغ:</b> <code>$${Number(trade.amount).toFixed(2)}</code>\n` +
+      (trade.openPrice && trade.closePrice ? `📍 <b>السعر:</b> <code>${trade.openPrice}</code> ⬅️ <code>${trade.closePrice}</code>\n` : '') +
+      (trade.ticketId ? `🎫 <b>رقم التذكرة:</b> <code>#${trade.ticketId}</code>\n` : '') +
+      (typeof trade.dailyPnL === 'number'
+        ? `💰 <b>صافي اليوم:</b> <code>${trade.dailyPnL >= 0 ? '+' : '-'}$${Math.abs(trade.dailyPnL).toFixed(2)}</code>`
+        : '');
 
     const result = await this.sendMessage(messageHtml);
     if (result.success) {
@@ -345,19 +558,18 @@ export class TelegramBotService {
         const isAuth = po.isAuthVerified();
         const acc = po.getDiagnostics()?.account;
         if (isAuth && acc?.balance !== null && acc?.balance !== undefined && !isNaN(acc.balance)) {
-          const mode = acc.isDemo ? 'تجريبي (DEMO)' : 'حقيقي (REAL)';
           accountSnippet = `\n💼 <b>حساب Pocket Option المربوط:</b>\n` +
-            `💰 <b>الرصيد:</b> <code>$${Number(acc.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${acc.currency || 'USD'}</code> (${mode})\n` +
+            `💰 <b>الرصيد:</b> <code>$${Number(acc.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${acc.currency || 'USD'}</code> (حقيقي REAL)\n` +
             `🆔 <b>معرف الحساب:</b> <code>${acc.uidMasked || acc.uid || 'موثق'}</code>\n`;
         }
       }
 
       return (
-        `👋 <b>أهلاً بك يا ${senderName} في بوت SABAA AI الرسمي!</b>\n\n` +
-        `🤖 هذا البوت مرتبط مباشرة بغرفة توليد وتفعيل المفاتيح، ورصيد حساب Pocket Option، ونظام الإشارات الحية للمنصة.\n` +
+        `👋 <b>أهلاً بك يا ${senderName} في بوت SABAA QUANT الرسمي!</b>\n\n` +
+        `🤖 هذا البوت مرتبط مباشرة بغرفة توليد وتفعيل المفاتيح، ورصيد حساب Pocket Option الحقيقي، ونظام الإشارات الحية للمنصة.\n` +
         accountSnippet +
         `\n<b>الأوامر المتاحة:</b>\n` +
-        `💰 <code>/balance</code> - للاستعلام المباشر عن رصيد حساب التداول (DEMO / REAL)\n` +
+        `💰 <code>/balance</code> - للاستعلام المباشر عن رصيد حساب التداول الحقيقي (REAL)\n` +
         `📊 <code>/status</code> - للاستعلام عن حالة اشتراكك، رصيد الحساب، والأجهزة المصرحة\n` +
         `🔑 <code>/activate [الكود]</code> - للتحقق من كود التفعيل وربطه بحسابك\n` +
         `📈 <code>/signals</code> - لعرض أحدث الإشارات الخوارزمية الفورية\n` +
@@ -386,14 +598,13 @@ export class TelegramBotService {
       const isConnected = po.isConnected();
       const diag = po.getDiagnostics();
       const acc = diag?.account;
-      const isDemo = Boolean(acc?.isDemo);
-      const modeText = isDemo ? 'تجريبي (DEMO Sandbox)' : 'حقيقي (REAL Account)';
+      const modeText = 'حقيقي (REAL Account)';
       let rawBal = acc?.balance;
 
       if (!isConnected) {
         return (
           `🔴 <b>الاتصال بالوسيط مقطوع:</b>\n\n` +
-          `يرجى فتح المنصة في المتصفح والاتصال برمز جلسة SSD أو الدخول التجريبي لتفعيل المزامنة المباشرة.`
+          `يرجى فتح المنصة في المتصفح والاتصال برمز جلسة SSD الحقيقي لتفعيل المزامنة المباشرة.`
         );
       }
 
@@ -418,7 +629,7 @@ export class TelegramBotService {
         const balNum = Number(rawBal);
         const uidStr = acc?.uidMasked || acc?.uid || diag?.authUid || 'موثق';
         return (
-          `💰 <b>بيانات رصيد الحساب المباشر - SABAA AI</b>\n\n` +
+          `💰 <b>بيانات رصيد الحساب المباشر - SABAA QUANT</b>\n\n` +
           `💵 <b>الرصيد المتاح:</b> <code>$${balNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${acc?.currency || 'USD'}</code>\n` +
           `🏷 <b>نوع الحساب:</b> ${modeText}\n` +
           `🆔 <b>معرف الحساب (UID):</b> <code>${uidStr}</code>\n` +
@@ -461,11 +672,10 @@ export class TelegramBotService {
         const rawBal = acc?.balance;
 
         if (isAuth && rawBal !== null && rawBal !== undefined && !isNaN(rawBal)) {
-          const mode = acc?.isDemo ? 'DEMO Sandbox' : 'REAL Account';
           brokerInfo =
             `\n\n💼 <b>حساب الوسيط (Pocket Option):</b>\n` +
             `🟢 <b>الحالة:</b> متصل وموثق\n` +
-            `💵 <b>الرصيد:</b> <code>$${Number(rawBal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${acc?.currency || 'USD'}</code> (${mode})\n` +
+            `💵 <b>الرصيد:</b> <code>$${Number(rawBal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${acc?.currency || 'USD'}</code> (REAL Account)\n` +
             `🆔 <b>معرف الحساب:</b> <code>${acc?.uidMasked || acc?.uid || 'موثق'}</code>`;
         } else if (isAuth) {
           po.requestBalance();
@@ -484,7 +694,7 @@ export class TelegramBotService {
       }
 
       return (
-        `📊 <b>استعلام التراخيص والحسابات - SABAA AI</b>\n\n` +
+        `📊 <b>استعلام التراخيص والحسابات - SABAA QUANT</b>\n\n` +
         `👤 <b>معرف التلجرام الخاص بك:</b> <code>${sender.id}</code>\n` +
         (sender.username ? `🔹 <b>اسم المستخدم:</b> @${sender.username}\n` : '') +
         `🕒 <b>خادم التراخيص:</b> متصل ونشط عبر API 🟢` +
@@ -498,7 +708,7 @@ export class TelegramBotService {
     // 5. /signals
     if (command === '/signals') {
       return (
-        `📈 <b>مركز الإشارات الفورية - SABAA AI</b>\n\n` +
+        `📈 <b>مركز الإشارات الفورية - SABAA QUANT</b>\n\n` +
         `⚡️ يتم بث الإشارات تلقائياً في القناة والمجموعات المعتمدة عند توفر شروط الدخول الخوارزمية المؤكدة (Confluence >= 3).\n` +
         `🔍 يرجى متابعة بث الإشارات في القناة أو فتح منصة التداول عبر المتصفح لمشاهدة التحليل على الشارت الحي.`
       );
@@ -507,8 +717,8 @@ export class TelegramBotService {
     // 6. /help
     if (command === '/help') {
       return (
-        `📖 <b>دليل استخدام بوت التلجرام - SABAA AI</b>\n\n` +
-        `💰 <b>استعلام الرصيد:</b> أرسل <code>/balance</code> لعرض رصيد حساب Pocket Option المتصل ونوعه (تجريبي أو حقيقي).\n` +
+        `📖 <b>دليل استخدام بوت التلجرام - SABAA QUANT</b>\n\n` +
+        `💰 <b>استعلام الرصيد:</b> أرسل <code>/balance</code> لعرض رصيد حساب Pocket Option الحقيقي المتصل.\n` +
         `📊 <b>حالة النظام:</b> أرسل <code>/status</code> لعرض حالة الخادم والحساب واشتراكك.\n` +
         `1️⃣ <b>تفعيل المفتاح:</b> أرسل <code>/activate [الكود]</code> للتحقق من صلاحية الكود والمدة والأجهزة المسموحة.\n` +
         `2️⃣ <b>دخول المنصة:</b> افتح رابط منصة التداول عبر المتصفح، وسجّل الدخول وضع كود التفعيل لتفتح لك كامل الأدوات.\n` +
@@ -577,7 +787,7 @@ export class TelegramBotService {
       : 'يبدأ الحساب عند أول تفعيل بالمتصفح';
 
     return (
-      `✅ <b>معلومات كود التفعيل المعتمد - SABAA AI</b>\n\n` +
+      `✅ <b>معلومات كود التفعيل المعتمد - SABAA QUANT</b>\n\n` +
       `🔑 <b>رمز الكود:</b> <code>${record.code}</code>\n` +
       `📋 <b>الحالة:</b> ${statusBadge}\n` +
       `⏳ <b>المدة المصرحة:</b> ${record.durationLabel}\n` +

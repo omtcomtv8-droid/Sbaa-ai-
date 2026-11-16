@@ -77,6 +77,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminToken, onLo
   const [genBoundEmail, setGenBoundEmail] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [genSuccessMessage, setGenSuccessMessage] = useState<string | null>(null);
+  const [genErrorMessage, setGenErrorMessage] = useState<string | null>(null);
+  const [dashboardNotice, setDashboardNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [pendingRevokeCodeId, setPendingRevokeCodeId] = useState<string | null>(null);
+  const [pendingRevokeDeviceId, setPendingRevokeDeviceId] = useState<string | null>(null);
 
   // Action Dialogs
   const [extendModalCode, setExtendModalCode] = useState<any | null>(null);
@@ -151,6 +155,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminToken, onLo
     e.preventDefault();
     setIsGenerating(true);
     setGenSuccessMessage(null);
+    setGenErrorMessage(null);
 
     let durationHours = Number(genDurationType);
     let customHours: number | undefined = undefined;
@@ -161,7 +166,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminToken, onLo
       durationHours = customHours;
     } else if (genDurationType === 'exact') {
       if (!genExactDate) {
-        alert(isRTL ? 'يرجى تحديد تاريخ انتهاء الصلاحية' : 'Please select an exact expiration date');
+        setGenErrorMessage(isRTL ? 'يرجى تحديد تاريخ انتهاء الصلاحية' : 'Please select an exact expiration date');
         setIsGenerating(false);
         return;
       }
@@ -185,10 +190,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminToken, onLo
       setIsGenerating(false);
 
       if (data.success) {
+        const generatedCount = data.codes?.length ?? Number(genCount) ?? 1;
         setGenSuccessMessage(
           isRTL
-            ? `✅ تم توليد ${data.count} كود تفعيل بنجاح!`
-            : `✅ Successfully generated ${data.count} activation code(s)!`
+            ? `تم توليد ${generatedCount} كود تفعيل بنجاح!`
+            : `Successfully generated ${generatedCount} activation code(s)!`
         );
         loadData();
         setTimeout(() => {
@@ -196,24 +202,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminToken, onLo
           setGenSuccessMessage(null);
         }, 2000);
       } else {
-        alert(data.error || 'Failed to generate codes');
+        setGenErrorMessage(data.error || (isRTL ? 'فشل توليد الأكواد' : 'Failed to generate codes'));
       }
     } catch {
       setIsGenerating(false);
-      alert('Error generating codes');
+      setGenErrorMessage(isRTL ? 'خطأ أثناء توليد الأكواد' : 'Error generating codes');
     }
   };
 
   const handleRevokeCode = async (codeId: string) => {
-    if (!confirm(isRTL ? 'هل أنت متأكد من إلغاء تفعيل هذا الكود فوراً؟' : 'Are you sure you want to revoke this code?')) return;
+    setPendingRevokeCodeId(null);
     try {
       const res = await fetchWithAuth(`/api/admin/codes/${codeId}/revoke`, {
         method: 'POST',
         body: JSON.stringify({ reason: 'Revoked from admin dashboard' }),
       });
-      if (res.ok) loadData();
+      if (res.ok) {
+        setDashboardNotice({ type: 'success', text: isRTL ? 'تم إلغاء الكود بنجاح' : 'Activation code revoked' });
+        loadData();
+      } else {
+        setDashboardNotice({ type: 'error', text: isRTL ? 'تعذر إلغاء الكود' : 'Failed to revoke code' });
+      }
     } catch {
-      // ignore
+      setDashboardNotice({ type: 'error', text: isRTL ? 'خطأ في الاتصال بالخادم' : 'Network error revoking code' });
     }
   };
 
@@ -265,15 +276,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminToken, onLo
   };
 
   const handleRevokeDevice = async (deviceId: string) => {
-    if (!confirm(isRTL ? 'هل أنت متأكد من إلغاء هذا الجهاز؟' : 'Revoke this device?')) return;
+    setPendingRevokeDeviceId(null);
     try {
       const res = await fetchWithAuth(`/api/admin/devices/${deviceId}/revoke`, {
         method: 'POST',
         body: JSON.stringify({ reason: 'Revoked by admin' }),
       });
-      if (res.ok) loadData();
+      if (res.ok) {
+        setDashboardNotice({ type: 'success', text: isRTL ? 'تم إلغاء الجهاز بنجاح' : 'Device revoked' });
+        loadData();
+      } else {
+        setDashboardNotice({ type: 'error', text: isRTL ? 'تعذر إلغاء الجهاز' : 'Failed to revoke device' });
+      }
     } catch {
-      // ignore
+      setDashboardNotice({ type: 'error', text: isRTL ? 'خطأ في الاتصال بالخادم' : 'Network error revoking device' });
     }
   };
 
@@ -431,12 +447,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminToken, onLo
           <div className="p-2 hidden sm:block rounded-xl bg-slate-900/60 border border-slate-800 text-[10px] text-slate-500">
             <span>Server: Active</span>
             <br />
-            <span className="font-mono text-emerald-400">Node {systemStatus?.nodeVersion || 'v20+'}</span>
+            <span className="font-mono text-emerald-400">Node {systemStatus?.status?.nodeVersion || 'v22+'}</span>
           </div>
         </nav>
 
         {/* Viewport Content */}
         <main className="flex-1 p-4 sm:p-6 overflow-y-auto bg-[#080B10]">
+          {dashboardNotice && (
+            <div
+              className={`mb-4 p-3 rounded-xl border text-xs font-bold flex items-center justify-between gap-2 ${
+                dashboardNotice.type === 'success'
+                  ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                  : 'bg-rose-500/15 border-rose-500/40 text-rose-300'
+              }`}
+            >
+              <span>{dashboardNotice.text}</span>
+              <button onClick={() => setDashboardNotice(null)} className="text-slate-400 hover:text-slate-200 cursor-pointer">
+                <XCircle className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           {/* ================= TAB 1: OVERVIEW ================= */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
@@ -711,13 +741,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminToken, onLo
                                   {c.status === 'ACTIVE' ? (isRTL ? 'تعطيل' : 'Disable') : (isRTL ? 'تفعيل' : 'Enable')}
                                 </button>
                                 {c.status !== 'REVOKED' && (
-                                  <button
-                                    onClick={() => handleRevokeCode(c.id)}
-                                    className="p-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 cursor-pointer"
-                                    title="Revoke"
-                                  >
-                                    <XCircle className="w-3.5 h-3.5" />
-                                  </button>
+                                  pendingRevokeCodeId === c.id ? (
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => handleRevokeCode(c.id)}
+                                        className="px-2 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold cursor-pointer"
+                                      >
+                                        {isRTL ? 'تأكيد' : 'Yes'}
+                                      </button>
+                                      <button
+                                        onClick={() => setPendingRevokeCodeId(null)}
+                                        className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] cursor-pointer"
+                                      >
+                                        {isRTL ? 'إلغاء' : 'No'}
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => setPendingRevokeCodeId(c.id)}
+                                      className="p-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 cursor-pointer"
+                                      title="Revoke"
+                                    >
+                                      <XCircle className="w-3.5 h-3.5" />
+                                    </button>
+                                  )
                                 )}
                               </div>
                             </td>
@@ -890,12 +937,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminToken, onLo
                             </td>
                             <td className="py-3 px-4 text-right">
                               {d.status === 'ACTIVE' && (
-                                <button
-                                  onClick={() => handleRevokeDevice(d.id)}
-                                  className="px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 font-bold text-xs cursor-pointer"
-                                >
-                                  {isRTL ? 'إلغاء الجهاز' : 'Revoke'}
-                                </button>
+                                pendingRevokeDeviceId === d.id ? (
+                                  <div className="inline-flex items-center gap-1.5">
+                                    <button
+                                      onClick={() => handleRevokeDevice(d.id)}
+                                      className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs cursor-pointer"
+                                    >
+                                      {isRTL ? 'تأكيد الإلغاء' : 'Confirm'}
+                                    </button>
+                                    <button
+                                      onClick={() => setPendingRevokeDeviceId(null)}
+                                      className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs cursor-pointer"
+                                    >
+                                      {isRTL ? 'تراجع' : 'Cancel'}
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => setPendingRevokeDeviceId(d.id)}
+                                    className="px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 font-bold text-xs cursor-pointer"
+                                  >
+                                    {isRTL ? 'إلغاء الجهاز' : 'Revoke'}
+                                  </button>
+                                )
                               )}
                             </td>
                           </tr>
@@ -972,7 +1036,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminToken, onLo
                     <span>{isRTL ? 'مدة تشغيل الخادم' : 'Server Uptime'}</span>
                   </div>
                   <div className="text-xl font-bold font-mono text-emerald-400">
-                    {Math.floor((systemStatus?.uptimeSeconds || 0) / 3600)}h {Math.floor(((systemStatus?.uptimeSeconds || 0) % 3600) / 60)}m
+                    {Math.floor(Math.floor(systemStatus?.status?.uptime || 0) / 3600)}h {Math.floor((Math.floor(systemStatus?.status?.uptime || 0) % 3600) / 60)}m
                   </div>
                 </div>
 
@@ -982,7 +1046,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminToken, onLo
                     <span>{isRTL ? 'استهلاك الذاكرة' : 'Memory Heap'}</span>
                   </div>
                   <div className="text-xl font-bold font-mono text-blue-400">
-                    {systemStatus?.memory?.heapUsedMb || 0} MB / {systemStatus?.memory?.heapTotalMb || 0} MB
+                    {Math.round((systemStatus?.status?.memoryUsage?.heapUsed || 0) / 1024 / 1024)} MB / {Math.round((systemStatus?.status?.memoryUsage?.heapTotal || 0) / 1024 / 1024)} MB
                   </div>
                 </div>
 
@@ -1155,6 +1219,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ adminToken, onLo
             {genSuccessMessage && (
               <div className="my-3 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold">
                 {genSuccessMessage}
+              </div>
+            )}
+            {genErrorMessage && (
+              <div className="my-3 p-3 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-bold">
+                {genErrorMessage}
               </div>
             )}
 

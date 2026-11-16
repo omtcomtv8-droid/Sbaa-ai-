@@ -90,22 +90,11 @@ export class DatabaseService {
   }
 
   private initFirebase() {
-    try {
-      const configPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
-      if (fs.existsSync(configPath)) {
-        const configRaw = fs.readFileSync(configPath, 'utf8');
-        const config = JSON.parse(configRaw);
-        const app = getApps().length === 0 ? initializeApp(config) : getApp();
-        const dbId = config.firestoreDatabaseId && config.firestoreDatabaseId !== '(default)'
-          ? config.firestoreDatabaseId
-          : undefined;
-        this.db = dbId ? getFirestore(app, dbId) : getFirestore(app);
-        this.isConnected = true;
-        console.log('[DatabaseService] Connected to Firestore instance:', dbId || '(default)');
-      }
-    } catch (err) {
-      console.warn('[DatabaseService] Notice initializing Firestore:', err instanceof Error ? err.message : String(err));
-    }
+    // Node.js backend uses atomic in-memory + .data JSON persistence;
+    // browser clients interact directly with Firestore under authenticated user security rules.
+    this.db = null;
+    this.isConnected = true;
+    console.log('[DatabaseService] Initialized resilient local atomic store (.data/)');
   }
 
   // Backup persistence state for fast warm reboots

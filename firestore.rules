@@ -2,57 +2,195 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isSignedIn() {
+    // Global default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isAuthenticated() {
       return request.auth != null && request.auth.uid != null;
     }
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && !id.matches('.*[/\\\\].*');
     }
 
-    // User Profile Document
+    function isOwner(userId) {
+      return isAuthenticated() && isValidId(userId) && request.auth.uid == userId;
+    }
+
+    function isNonEmptyString(val, maxLen) {
+      return val is string && val.size() > 0 && val.size() <= maxLen;
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'role', 'status',
+          'activeActivationId', 'activeExpiresAt', 'activeCode',
+          'createdAt', 'updatedAt', 'lastLoginAt'
+        ])
+        && data.uid == userId
+        && isNonEmptyString(data.createdAt, 64)
+        && isNonEmptyString(data.updatedAt, 64)
+        && (!('email' in data) || (data.email is string && data.email.size() <= 254))
+        && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 128))
+        && (!('role' in data) || data.role in ['trader', 'admin', 'guest'])
+        && (!('status' in data) || data.status in ['ACTIVE', 'DISABLED'])
+        && (!('activeActivationId' in data) || (data.activeActivationId is string && data.activeActivationId.size() <= 128))
+        && (!('activeExpiresAt' in data) || (data.activeExpiresAt is string && data.activeExpiresAt.size() <= 64))
+        && (!('activeCode' in data) || (data.activeCode is string && data.activeCode.size() <= 64))
+        && (!('lastLoginAt' in data) || (data.lastLoginAt is string && data.lastLoginAt.size() <= 64));
+    }
+
+    function isValidConnectionConfig(data, userId) {
+      return data.keys().hasAll(['userId', 'endpoint', 'isDemo', 'status', 'updatedAt'])
+        && data.keys().hasOnly([
+          'userId', 'endpoint', 'isDemo', 'accountUid',
+          'status', 'lastConnectedAt', 'lastError', 'updatedAt'
+        ])
+        && data.userId == userId
+        && isNonEmptyString(data.endpoint, 500)
+        && data.isDemo is bool
+        && data.status in ['connected', 'disconnected', 'connecting', 'failed']
+        && isNonEmptyString(data.updatedAt, 64)
+        && (!('accountUid' in data) || (data.accountUid is string && data.accountUid.size() <= 128))
+        && (!('lastConnectedAt' in data) || (data.lastConnectedAt is string && data.lastConnectedAt.size() <= 64))
+        && (!('lastError' in data) || (data.lastError is string && data.lastError.size() <= 500));
+    }
+
+    function isValidTradeOrder(data, userId) {
+      return data.keys().hasAll(['orderId', 'userId', 'symbol', 'direction', 'amount', 'status', 'timestamp'])
+        && data.keys().hasOnly([
+          'orderId', 'userId', 'symbol', 'direction', 'amount',
+          'entryPrice', 'stopLoss', 'takeProfit', 'timeframe', 'status', 'timestamp'
+        ])
+        && data.userId == userId
+        && isNonEmptyString(data.orderId, 128)
+        && isNonEmptyString(data.symbol, 64)
+        && data.direction in ['BUY', 'SELL']
+        && data.amount is number && data.amount > 0 && data.amount <= 100000
+        && data.status in ['PENDING', 'EXECUTED', 'CLOSED', 'REJECTED']
+        && isNonEmptyString(data.timestamp, 64)
+        && (!('entryPrice' in data) || data.entryPrice is number)
+        && (!('stopLoss' in data) || data.stopLoss is number)
+        && (!('takeProfit' in data) || data.takeProfit is number)
+        && (!('timeframe' in data) || (data.timeframe is number && data.timeframe > 0 && data.timeframe <= 86400));
+    }
+
+    function isValidRiskSettings(data, userId) {
+      return data.keys().hasAll(['userId', 'riskPerTrade', 'maxDailyLoss', 'updatedAt'])
+        && data.keys().hasOnly([
+          'userId', 'riskPerTrade', 'maxDailyLoss', 'maxConcurrentTrades',
+          'stopLossPips', 'takeProfitPips', 'updatedAt'
+        ])
+        && data.userId == userId
+        && data.riskPerTrade is number && data.riskPerTrade > 0 && data.riskPerTrade <= 100
+        && data.maxDailyLoss is number && data.maxDailyLoss > 0 && data.maxDailyLoss <= 100
+        && isNonEmptyString(data.updatedAt, 64)
+        && (!('maxConcurrentTrades' in data) || (data.maxConcurrentTrades is number && data.maxConcurrentTrades >= 1 && data.maxConcurrentTrades <= 100))
+        && (!('stopLossPips' in data) || data.stopLossPips is number)
+        && (!('takeProfitPips' in data) || data.takeProfitPips is number);
+    }
+
+    function isValidUserTrade(data, uid) {
+      return data.keys().hasAll(['id', 'userId', 'asset', 'action', 'amount', 'openTime', 'result', 'updatedAt'])
+        && data.keys().hasOnly([
+          'id', 'ticketId', 'userId', 'asset', 'accountMode', 'timeframe',
+          'strategyName', 'action', 'amount', 'openTime', 'closeTime',
+          'openPrice', 'entryPrice', 'closePrice', 'exitPrice', 'profit',
+          'payout', 'result', 'durationSec', 'reasons', 'confluenceScore', 'updatedAt'
+        ])
+        && data.userId == uid
+        && isNonEmptyString(data.id, 128)
+        && isNonEmptyString(data.asset, 64)
+        && data.action in ['call', 'put']
+        && data.amount is number && data.amount > 0 && data.amount <= 100000
+        && data.openTime is number
+        && data.result in ['WIN', 'LOSS', 'DRAW', 'PENDING', 'WON', 'LOST', 'FAILED']
+        && isNonEmptyString(data.updatedAt, 64)
+        && (!('ticketId' in data) || (data.ticketId is string && data.ticketId.size() <= 128))
+        && (!('accountMode' in data) || data.accountMode in ['REAL', 'DEMO'])
+        && (!('timeframe' in data) || (data.timeframe is number && data.timeframe > 0 && data.timeframe <= 86400))
+        && (!('strategyName' in data) || (data.strategyName is string && data.strategyName.size() <= 200))
+        && (!('closeTime' in data) || data.closeTime is number)
+        && (!('openPrice' in data) || data.openPrice is number)
+        && (!('entryPrice' in data) || data.entryPrice is number)
+        && (!('closePrice' in data) || data.closePrice is number)
+        && (!('exitPrice' in data) || data.exitPrice is number)
+        && (!('profit' in data) || data.profit is number)
+        && (!('payout' in data) || data.payout is number)
+        && (!('durationSec' in data) || data.durationSec is number)
+        && (!('reasons' in data) || (data.reasons is list && data.reasons.size() <= 20))
+        && (!('confluenceScore' in data) || data.confluenceScore is number);
+    }
+
+    // User Profile & Owned Subcollections
     match /users/{userId} {
       allow get: if isOwner(userId);
-      allow list: if isSignedIn();
-      allow create, update: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && isValidUserProfile(request.resource.data, userId);
+      allow update: if isOwner(userId)
+        && isValidUserProfile(request.resource.data, userId)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if false;
 
-      // User Subcollections (connections, orders, settings)
-      match /{allSubcollections=**} {
-        allow read, write: if isOwner(userId);
+      match /connections/{connectionId} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && isValidId(connectionId)
+          && isValidConnectionConfig(request.resource.data, userId);
+        allow delete: if isOwner(userId);
+      }
+
+      match /orders/{orderId} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && isValidId(orderId)
+          && isValidTradeOrder(request.resource.data, userId);
+        allow delete: if false;
+      }
+
+      match /settings/{settingId} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+          && isValidId(settingId)
+          && isValidRiskSettings(request.resource.data, userId);
+        allow delete: if isOwner(userId);
       }
     }
 
-    // User Trades Collection
+    // User Trades Collection (owned per userId)
     match /userTrades/{tradeId} {
-      allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid);
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get, list: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated()
+        && isValidId(tradeId)
+        && tradeId.matches('^' + request.auth.uid + '_.*')
+        && isValidUserTrade(request.resource.data, request.auth.uid);
+      allow update: if isAuthenticated()
+        && resource.data.userId == request.auth.uid
+        && isValidUserTrade(request.resource.data, request.auth.uid)
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.id == resource.data.id;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
 
-    // Administrator Accounts
+    // Server-managed collections (strictly isolated from direct browser client access)
     match /admins/{adminId} {
-      allow read: if isSignedIn() && request.auth.uid == adminId;
-      allow write: if isSignedIn() && request.auth.uid == adminId;
+      allow read, write: if false;
     }
 
-    // Activation Codes (license system)
     match /activation_codes/{codeId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if false;
     }
 
-    // Authorized Hardware Devices
     match /devices/{deviceId} {
-      allow read, write: if isSignedIn();
+      allow read, write: if false;
     }
 
-    // Security Audit Logs
     match /audit_logs/{logId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update, delete: if false;
+      allow read, write: if false;
     }
   }
 }

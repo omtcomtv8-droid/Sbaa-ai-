@@ -1,0 +1,30 @@
+{
+  "config": {
+    "strategyId": "auto",
+    "baseAmount": 100,
+    "maxAmount": 1000,
+    "stopLoss": 556,
+    "takeProfit": 599,
+    "asset": "EURUSD_otc",
+    "timeframe": 60,
+    "isDemo": false,
+    "enableMartingale": false,
+    "martingaleMultiplier": 2,
+    "maxMartingaleDepth": 2,
+    "tradesBeforeRest": 10,
+    "restMinMinutes": 15,
+    "restMaxMinutes": 45,
+    "maxConcurrentTrades": 1,
+    "cooldownBetweenTradesSec": 0
+  },
+  "isRunning": false,
+  "isEmergencyStopped": false,
+  "dailyPnL": 824.8,
+  "totalTrades": 0,
+  "winningTrades": 7,
+  "losingTrades": 2,
+  "circuitBreakerTripped": true,
+  "circuitBreakerReason": "تم بلوغ هدف الربح اليومي (+$824.80)",
+  "statsDate": "2026-11-16",
+  "savedAt": "2026-11-16T20:59:36.817Z"
+}

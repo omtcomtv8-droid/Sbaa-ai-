@@ -1,13 +1,13 @@
 {
-  "patternsDetectedCount": 114,
+  "patternsDetectedCount": 116,
   "buySignalsCount": 0,
   "sellSignalsCount": 0,
-  "waitDecisionsCount": 141,
+  "waitDecisionsCount": 143,
   "totalDemoTrades": 0,
-  "wonDemoTrades": 3,
-  "lostDemoTrades": 0,
+  "wonDemoTrades": 15,
+  "lostDemoTrades": 6,
   "drawDemoTrades": 0,
-  "todayDemoPnL": 26.400000000000002,
+  "todayDemoPnL": 407.20000000000005,
   "config": {
     "enabled": true,
     "autoDemoExecution": false,

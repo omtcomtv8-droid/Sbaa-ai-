@@ -1,6 +1,6 @@
 import { DetailedTradeRecord } from '../components/TradeDetailModal';
-import { db } from '../lib/firebase';
-import { collection, doc, setDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, doc, setDoc, getDocs, query, where, limit, writeBatch } from 'firebase/firestore';
 
 const STORAGE_KEY = 'sbaa_detailed_trades_history';
 
@@ -172,18 +172,36 @@ export const tradeHistoryStorage = {
 
     // Sync recent records asynchronously in background without UI blocking
     if (firebaseUid && db) {
+      const firestoreInstance = db;
       setTimeout(async () => {
-        try {
-          const sliceToSync = newRecords.slice(0, 5);
-          for (const rec of sliceToSync) {
-            const userTradeRef = doc(db, 'userTrades', `${firebaseUid}_${rec.id}`);
-            await setDoc(userTradeRef, {
-              ...rec,
-              userId: firebaseUid,
-              updatedAt: new Date().toISOString(),
-            }, { merge: true });
+        const sliceToSync = newRecords.slice(0, 5);
+        for (const rec of sliceToSync) {
+          const docId = `${firebaseUid}_${rec.id}`;
+          try {
+            const userTradeRef = doc(firestoreInstance, 'userTrades', docId);
+            const sanitized: Record<string, any> = {};
+            for (const [k, v] of Object.entries(rec)) {
+              if (v !== undefined) {
+                sanitized[k] = v;
+              }
+            }
+            await setDoc(
+              userTradeRef,
+              {
+                ...sanitized,
+                userId: firebaseUid,
+                updatedAt: new Date().toISOString(),
+              },
+              { merge: true }
+            );
+          } catch (err) {
+            try {
+              handleFirestoreError(err, OperationType.WRITE, `userTrades/${docId}`);
+            } catch {
+              // Structured error logged via handleFirestoreError
+            }
           }
-        } catch {}
+        }
       }, 50);
     }
 
@@ -199,7 +217,11 @@ export const tradeHistoryStorage = {
   async loadFromFirestore(firebaseUid: string): Promise<DetailedTradeRecord[]> {
     if (!firebaseUid || !db) return loadLocalTrades();
     try {
-      const q = query(collection(db, 'userTrades'), orderBy('openTime', 'desc'), limit(50));
+      const q = query(
+        collection(db, 'userTrades'),
+        where('userId', '==', firebaseUid),
+        limit(50)
+      );
       const snap = await getDocs(q);
       const remoteTrades: DetailedTradeRecord[] = [];
       snap.forEach((d) => {
@@ -214,9 +236,34 @@ export const tradeHistoryStorage = {
         return loadLocalTrades();
       }
     } catch (err) {
-      console.warn('[FIRESTORE] Could not load trades from Firestore:', err);
+      handleFirestoreError(err, OperationType.LIST, 'userTrades');
     }
     return loadLocalTrades();
+  },
+
+  async clearTrades(firebaseUid?: string | null): Promise<void> {
+    saveLocalTrades([]);
+    const uid = auth.currentUser?.uid || firebaseUid;
+    if (!uid || !db || !auth.currentUser) return;
+    try {
+      const q = query(
+        collection(db, 'userTrades'),
+        where('userId', '==', auth.currentUser.uid),
+        limit(200)
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const batch = writeBatch(db);
+        snap.docs.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+      }
+    } catch (err) {
+      try {
+        handleFirestoreError(err, OperationType.DELETE, 'userTrades');
+      } catch {
+        // Structured Firestore error already logged via handleFirestoreError
+      }
+    }
   },
 };
 

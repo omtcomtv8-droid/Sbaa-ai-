@@ -6,6 +6,8 @@ export interface TelegramStatus {
   botFirstName: string;
   chatId: string;
   autoBroadcastSignals: boolean;
+  autoBroadcastTrades?: boolean;
+  displayTimezone?: string;
   minConfidence: number;
   lastTestStatus?: 'SUCCESS' | 'FAILED' | 'IDLE';
   lastTestMessage?: string;
@@ -38,6 +40,7 @@ export class TelegramService {
         botFirstName: '',
         chatId: '',
         autoBroadcastSignals: false,
+        autoBroadcastTrades: true,
         minConfidence: 70,
         lastTestStatus: 'FAILED',
         lastTestMessage: e?.message || 'Failed to connect to Telegram service',
@@ -50,6 +53,8 @@ export class TelegramService {
     chatId?: string;
     enabled?: boolean;
     autoBroadcastSignals?: boolean;
+    autoBroadcastTrades?: boolean;
+    displayTimezone?: string;
     minConfidence?: number;
     password?: string;
     adminToken?: string;

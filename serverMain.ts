@@ -112,7 +112,7 @@ async function startServer() {
   );
 
   const sbaaEngine = new SbaaStrategyEngine(candleBuilder, poService, marketDataStore, broadcastSSE);
-  const autoTraderEngine = new AutoTraderEngine(strategyEngine, poService, broadcastSSE, sbaaEngine, undefined, candleBuilder, true, marketDataStore);
+  const autoTraderEngine = new AutoTraderEngine(strategyEngine, poService, broadcastSSE, sbaaEngine, undefined, candleBuilder, true, marketDataStore, telegramBotService);
 
   marketDataStore.setBrokerHistoryRequester((asset, tf) => {
     return poService.requestHistoricalCandles(asset, tf);
@@ -248,6 +248,7 @@ async function startServer() {
             strategy: signal.strategy,
             confirmations: signal.confirmations,
             reasons: signal.details || [],
+            timestamp: signal.timestamp || Date.now(),
           })
           .catch((err) => {
             console.warn('[SERVER] Telegram signal broadcast notice:', err?.message || err);
@@ -456,6 +457,19 @@ async function startServer() {
     } catch (err: any) {
       console.error('[API] /api/history error:', err);
       res.json({ history: [], performance: strategyEngine.getPerformanceMetrics() });
+    }
+  });
+
+  app.post('/api/history/clear', (req: Request, res: Response) => {
+    try {
+      const result = strategyEngine.clearSignalHistory();
+      res.json({
+        ...result,
+        history: [],
+        performance: strategyEngine.getPerformanceMetrics(),
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err?.message || 'Failed to clear signal history' });
     }
   });
 
@@ -1051,6 +1065,16 @@ async function startServer() {
     res.json({ ...result, status: autoTraderEngine.getStatus() });
   });
 
+  app.post('/api/autotrader/clear-trades', (req: Request, res: Response) => {
+    const result = autoTraderEngine.clearTradeList();
+    res.json({ ...result, status: autoTraderEngine.getStatus() });
+  });
+
+  app.post('/api/autotrader/clear-logs', (req: Request, res: Response) => {
+    const result = autoTraderEngine.clearLogs();
+    res.json({ ...result, status: autoTraderEngine.getStatus() });
+  });
+
   app.post('/api/autotrader/backtest', (req: Request, res: Response) => {
     try {
       const { strategyId, asset, timeframe, stake, payoutRatio } = req.body;
@@ -1164,12 +1188,12 @@ async function startServer() {
     res.json(scannerData);
   });
 
-  // Admin & System Telemetry
-  app.get('/api/admin/health', (req: Request, res: Response) => {
+  // Public System Telemetry (unshadowed by /api/admin auth router)
+  app.get('/api/telemetry/health', (req: Request, res: Response) => {
     res.json(sabaaService.getHealthTelemetry(sseClients.length, process.memoryUsage()));
   });
 
-  app.get('/api/admin/logs', (req: Request, res: Response) => {
+  app.get('/api/telemetry/logs', (req: Request, res: Response) => {
     res.json(sabaaService.getAuditLogs());
   });
 

@@ -27,6 +27,8 @@ export function createTelegramRouter(): Router {
         botFirstName: cfg.botFirstName || '',
         chatId: cfg.chatId || '',
         autoBroadcastSignals: cfg.autoBroadcastSignals,
+        autoBroadcastTrades: cfg.autoBroadcastTrades !== false,
+        displayTimezone: cfg.displayTimezone || '',
         minConfidence: cfg.minConfidence,
         lastTestStatus: cfg.lastTestStatus,
         lastTestMessage: cfg.lastTestMessage,
@@ -41,7 +43,7 @@ export function createTelegramRouter(): Router {
   // POST /api/telegram/config - Save telegram configuration (Protected by Admin or sbaa0000)
   router.post('/config', async (req: Request, res: Response) => {
     try {
-      const { botToken, chatId, enabled, autoBroadcastSignals, minConfidence, password } = req.body;
+      const { botToken, chatId, enabled, autoBroadcastSignals, autoBroadcastTrades, displayTimezone, minConfidence, password } = req.body;
       const adminToken = getAdminToken(req);
 
       // Verify either adminToken or password === sbaa0000
@@ -58,10 +60,12 @@ export function createTelegramRouter(): Router {
       }
 
       const updated = telegramBotService.saveConfig({
-        ...(botToken !== undefined ? { botToken: botToken.trim() } : {}),
-        ...(chatId !== undefined ? { chatId: chatId.trim() } : {}),
+        ...(botToken !== undefined && String(botToken).trim() ? { botToken: String(botToken).trim() } : {}),
+        ...(chatId !== undefined ? { chatId: String(chatId).trim() } : {}),
         ...(enabled !== undefined ? { enabled: Boolean(enabled) } : {}),
         ...(autoBroadcastSignals !== undefined ? { autoBroadcastSignals: Boolean(autoBroadcastSignals) } : {}),
+        ...(autoBroadcastTrades !== undefined ? { autoBroadcastTrades: Boolean(autoBroadcastTrades) } : {}),
+        ...(displayTimezone !== undefined ? { displayTimezone: String(displayTimezone).trim() } : {}),
         ...(minConfidence !== undefined ? { minConfidence: Math.max(50, Math.min(100, Number(minConfidence))) } : {}),
       });
 
@@ -143,7 +147,7 @@ export function createTelegramRouter(): Router {
       const deepLink = `https://t.me/${botUser}?start=${encodeURIComponent(code)}`;
 
       const messageHtml =
-        `<b>🔑 ترخيص تفعيل جديد - SABAA AI</b>\n\n` +
+        `<b>🔑 ترخيص تفعيل جديد - SABAA QUANT</b>\n\n` +
         `كود التفعيل: <code>${code}</code>\n` +
         `⏳ <b>المدة:</b> ${durationLabel || 'صلاحية محددة'}\n` +
         `📱 <b>حد الأجهزة:</b> ${maxDevices || 1} أجهزة\n` +

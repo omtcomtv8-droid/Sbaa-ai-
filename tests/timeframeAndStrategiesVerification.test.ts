@@ -50,7 +50,7 @@ describe('Timeframe System & Strategy Engine Comprehensive Verification', () => 
     ];
 
     for (const item of timeframes) {
-      const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, sbaaEngine);
+      const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, sbaaEngine, undefined, undefined, false);
       autoTrader.setTimeframe(item.tf);
       poService.setTimeframe(item.tf);
       sbaaEngine.setTimeframe(item.tf);
@@ -62,7 +62,7 @@ describe('Timeframe System & Strategy Engine Comprehensive Verification', () => 
   });
 
   it('2. Verifies strict minimum candle count (>=15 candles) and NO fallback to 1M or arbitrary frame', async () => {
-    const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, sbaaEngine);
+    const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, sbaaEngine, undefined, undefined, false);
     const asset = 'TEST_PAIR_otc';
     const tf = 900; // 15M
 
@@ -127,7 +127,7 @@ describe('Timeframe System & Strategy Engine Comprehensive Verification', () => 
   });
 
   it('3. Verifies SBAA Pro Engine dynamic trade duration based on timeframe', () => {
-    const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, sbaaEngine);
+    const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, sbaaEngine, undefined, undefined, false);
     const tf = 300; // 5M
     autoTrader.setTimeframe(tf);
 
@@ -175,7 +175,7 @@ describe('Timeframe System & Strategy Engine Comprehensive Verification', () => 
       'volume_flow',
     ];
 
-    const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, sbaaEngine);
+    const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, sbaaEngine, undefined, undefined, false);
     const tf = 60;
     autoTrader.setTimeframe(tf);
 
@@ -186,7 +186,7 @@ describe('Timeframe System & Strategy Engine Comprehensive Verification', () => 
   });
 
   it('5. Verifies autonomous auto-select strategy routing without conflicts', () => {
-    const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, sbaaEngine);
+    const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, sbaaEngine, undefined, undefined, false);
     const tf = 1800; // 30M
     autoTrader.setTimeframe(tf);
     autoTrader.saveSettings({ strategyId: 'auto', minSignalStrength: 75 });
@@ -244,7 +244,7 @@ describe('Timeframe System & Strategy Engine Comprehensive Verification', () => 
   });
 
   it('6. Verifies SBAA Pro Engine integrates all 26 strategies and generates trade decision', () => {
-    const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, sbaaEngine);
+    const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, sbaaEngine, undefined, undefined, false);
     const tf = 900; // 15M
     autoTrader.setTimeframe(tf);
     autoTrader.saveSettings({ strategyId: 'sbaa', minSignalStrength: 70 });
@@ -302,7 +302,7 @@ describe('Timeframe System & Strategy Engine Comprehensive Verification', () => 
   });
 
   it('7. Verifies user-selected timeframes (5M=300s, 15M=900s, 30M=1800s, 1H=3600s) strictly enforce order duration and NEVER collapse to 60s', () => {
-    const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, sbaaEngine);
+    const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, sbaaEngine, undefined, undefined, false);
 
     const testCases = [
       { tf: 60, expectedSec: 60, label: '1M (60s)' },
@@ -387,7 +387,7 @@ describe('Timeframe System & Strategy Engine Comprehensive Verification', () => 
       };
 
       const testSbaa = new SbaaStrategyEngine(candleBuilder, mockPo);
-      const testAutoTrader = new AutoTraderEngine(strategyEngine, mockPo, undefined, testSbaa);
+      const testAutoTrader = new AutoTraderEngine(strategyEngine, mockPo, undefined, testSbaa, undefined, undefined, false);
 
       const asset = `EURUSD_otc_${item.tf}`;
       const mockCandles = createMockCandles(40, 1.0800, 'up', item.tf);

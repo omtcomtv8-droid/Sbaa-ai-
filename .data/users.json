@@ -142,5 +142,18 @@
     "createdAt": "2026-10-02T11:03:06.590Z",
     "updatedAt": "2026-10-02T11:03:06.590Z",
     "lastLoginAt": "2026-10-02T11:03:06.590Z"
+  },
+  "user_1794855700847": {
+    "uid": "user_1794855700847",
+    "email": "user@sabaa.trader",
+    "displayName": "user",
+    "role": "admin",
+    "status": "ACTIVE",
+    "activeActivationId": "code_master_sbaa0000",
+    "activeExpiresAt": "2126-09-07T00:59:53.967Z",
+    "activeCode": "SBAA0000",
+    "createdAt": "2026-11-16T19:01:40.848Z",
+    "updatedAt": "2026-11-16T19:01:40.848Z",
+    "lastLoginAt": "2026-11-16T19:01:40.848Z"
   }
 }

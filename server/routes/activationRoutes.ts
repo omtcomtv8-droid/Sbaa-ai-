@@ -69,13 +69,30 @@ export function createActivationRouter(): Router {
     }
   });
 
-  // GET & POST /api/auth/credentials
+  // Helper to resolve UID from x-session-token or explicit uid parameter
+  const resolveUserUid = async (req: Request): Promise<string | null> => {
+    const headerToken = (req.headers['x-session-token'] as string) || '';
+    if (headerToken) {
+      const check = await activationManager.validateUserSession(headerToken);
+      if (check.valid && check.user?.uid) {
+        return check.user.uid;
+      }
+      const rawSession = await dbService.getSession(headerToken);
+      if (rawSession?.userId) {
+        return rawSession.userId;
+      }
+    }
+    const queryUid = typeof req.query.uid === 'string' ? req.query.uid.trim() : '';
+    const bodyUid = typeof req.body?.uid === 'string' ? req.body.uid.trim() : '';
+    return queryUid || bodyUid || null;
+  };
+
+  // GET, POST & DELETE /api/auth/credentials
   router.get('/credentials', async (req: Request, res: Response) => {
     try {
-      const sessionToken = req.headers['x-session-token'] as string;
-      const uid = req.query.uid as string;
+      const uid = await resolveUserUid(req);
       if (!uid) {
-        return res.status(400).json({ success: false, error: 'User UID required' });
+        return res.status(401).json({ success: false, error: 'Valid session token or User UID required' });
       }
       const creds = await dbService.getCredentials(uid);
       res.json({ success: true, credentials: creds || null });
@@ -86,21 +103,56 @@ export function createActivationRouter(): Router {
 
   router.post('/credentials', async (req: Request, res: Response) => {
     try {
-      const { uid, session, isDemo, endpoint } = req.body;
+      const uid = await resolveUserUid(req);
       if (!uid) {
-        return res.status(400).json({ success: false, error: 'User UID required' });
+        return res.status(401).json({ success: false, error: 'Valid session token or User UID required' });
       }
-      await dbService.saveCredentials({
-        id: `cred_${uid}`,
+
+      const { session, sessionToken: bodySessionToken, accountUid, platform } = req.body || {};
+      const existing = await dbService.getCredentials(uid);
+      const rawToken = typeof bodySessionToken === 'string' && bodySessionToken !== 'preserved'
+        ? bodySessionToken.trim()
+        : typeof session === 'string' && session !== 'preserved'
+        ? session.trim()
+        : '';
+
+      if (!rawToken && !existing) {
+        return res.status(400).json({ success: false, error: 'Platform session token is required' });
+      }
+
+      const masked = rawToken
+        ? rawToken.length > 10
+          ? `${rawToken.slice(0, 4)}...${rawToken.slice(-4)}`
+          : '****'
+        : existing?.sessionTokenMasked || '****';
+
+      const now = new Date().toISOString();
+      const record = {
+        id: existing?.id || `cred_${uid}`,
         userId: uid,
-        platform: 'pocket_option',
-        sessionTokenMasked: session ? `${session.slice(0, 4)}...${session.slice(-4)}` : '',
-        accountUid: uid,
-        isDemo: Boolean(isDemo),
-        status: 'CONNECTED',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
+        platform: platform || existing?.platform || 'pocket_option',
+        sessionTokenMasked: masked,
+        accountUid: typeof accountUid === 'string' ? accountUid.trim() : (existing?.accountUid || uid),
+        isDemo: false, // Real Live Account Only
+        status: 'CONNECTED' as const,
+        createdAt: existing?.createdAt || now,
+        updatedAt: now,
+      };
+
+      await dbService.saveCredentials(record);
+      res.json({ success: true, credentials: record });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  router.delete('/credentials', async (req: Request, res: Response) => {
+    try {
+      const uid = await resolveUserUid(req);
+      if (!uid) {
+        return res.status(401).json({ success: false, error: 'Valid session token or User UID required' });
+      }
+      await dbService.deleteCredentials(uid);
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });

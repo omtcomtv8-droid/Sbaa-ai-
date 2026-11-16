@@ -203,38 +203,38 @@
     "createdAt": "2026-10-05T20:07:57.116Z",
     "lastActiveAt": "2026-10-05T20:14:20.127Z"
   },
-  "dev_9f02936fe1a9924fb21ae7b3365fd5c90b32e92578d4b9d918dca5b8f5aa0eae": {
-    "id": "device_1790845033525_05c02a2d",
-    "deviceId": "device_1790845033525_05c02a2d",
-    "userId": "test_admin_google_uid",
-    "userEmail": "admin_test@platform.com",
+  "device_1794855700849_89e16323": {
+    "id": "device_1794855700849_89e16323",
+    "deviceId": "device_1794855700849_89e16323",
+    "userId": "user_1794855700847",
+    "userEmail": "user@sabaa.trader",
     "codeId": "code_master_sbaa0000",
     "code": "SBAA0000",
-    "deviceToken": "dev_9f02936fe1a9924fb21ae7b3365fd5c90b32e92578d4b9d918dca5b8f5aa0eae",
-    "fingerprint": "28b5c754a1624c8e48b48e43963cdd86",
-    "userAgent": "TestBrowser",
+    "deviceToken": "dev_f07bdfeea2fef52b125f3f8cd69fa1861328e349f81a549f204d8e21e2dbad44",
+    "fingerprint": "4b2c7fc2a2eeadc588d00c3c8b47cba3",
+    "userAgent": "curl/7.88.1",
     "ipAddress": "127.0.0.1",
     "os": "Web Browser",
     "browser": "Browser",
     "status": "ACTIVE",
-    "createdAt": "2026-10-01T08:57:13.525Z",
-    "lastActiveAt": "2026-10-08T09:44:02.742Z"
+    "createdAt": "2026-11-16T19:01:40.848Z",
+    "lastActiveAt": "2026-11-16T19:01:41.033Z"
   },
-  "dev_de7331391e1973d1ed93f63362bc5c276cb41daaef1770f21405dabe991dd507": {
-    "id": "device_1790845034339_03859bf7",
-    "deviceId": "device_1790845034339_03859bf7",
-    "userId": "test_arabic_admin_uid",
-    "userEmail": "arabic_admin@platform.com",
+  "dev_f07bdfeea2fef52b125f3f8cd69fa1861328e349f81a549f204d8e21e2dbad44": {
+    "id": "device_1794855700849_89e16323",
+    "deviceId": "device_1794855700849_89e16323",
+    "userId": "user_1794855700847",
+    "userEmail": "user@sabaa.trader",
     "codeId": "code_master_sbaa0000",
     "code": "SBAA0000",
-    "deviceToken": "dev_de7331391e1973d1ed93f63362bc5c276cb41daaef1770f21405dabe991dd507",
-    "fingerprint": "28b5c754a1624c8e48b48e43963cdd86",
-    "userAgent": "TestBrowser",
+    "deviceToken": "dev_f07bdfeea2fef52b125f3f8cd69fa1861328e349f81a549f204d8e21e2dbad44",
+    "fingerprint": "4b2c7fc2a2eeadc588d00c3c8b47cba3",
+    "userAgent": "curl/7.88.1",
     "ipAddress": "127.0.0.1",
     "os": "Web Browser",
     "browser": "Browser",
     "status": "ACTIVE",
-    "createdAt": "2026-10-01T08:57:14.339Z",
-    "lastActiveAt": "2026-10-08T09:44:03.438Z"
+    "createdAt": "2026-11-16T19:01:40.848Z",
+    "lastActiveAt": "2026-11-16T19:01:41.033Z"
   }
 }

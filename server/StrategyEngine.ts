@@ -1911,6 +1911,12 @@ export class StrategyEngine {
     return this.signalHistory;
   }
 
+  public clearSignalHistory(): { success: boolean; clearedCount: number } {
+    const clearedCount = this.signalHistory.length;
+    this.signalHistory = [];
+    return { success: true, clearedCount };
+  }
+
   /**
    * Calculates true, transparent performance statistics from real evaluated signals.
    * No fake win rates or fabricated figures.

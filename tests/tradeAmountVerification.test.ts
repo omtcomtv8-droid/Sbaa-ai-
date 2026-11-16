@@ -27,7 +27,7 @@ async function runTradeAmountVerificationTest() {
   );
   const strategyEngine = new StrategyEngine(candleBuilder);
   const sbaaEngine = new SbaaStrategyEngine(candleBuilder, poService);
-  const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, sbaaEngine);
+  const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, sbaaEngine, undefined, undefined, false);
 
   // TEST 1: Default config verification
   console.log('[TEST 1: Default AutoTraderEngine Config]');

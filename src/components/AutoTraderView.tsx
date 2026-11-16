@@ -28,6 +28,7 @@ import {
   Check,
   XCircle,
   ExternalLink,
+  Trash2,
 } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { TradeDetailModal, DetailedTradeRecord } from './TradeDetailModal';
@@ -132,7 +133,7 @@ interface BacktestReport {
 const STRATEGIES_LIST = [
   {
     id: 'sbaa',
-    nameAr: 'SBAA – استراتيجية سبع الخوارزمية المطورة (المحرك الشامل المدمج)',
+    nameAr: 'SBAA — استراتيجية سبع المدمجة الشاملة',
     nameEn: 'SBAA Quant Pro Engine',
     descAr: 'دمج شامل لجميع محاور واستراتيجيات سبع الـ 6: نماذج الشموع اليابانية المركبة، سحب السيولة (Sweeps)، كسر الهيكل (BOS/CHOCH)، انضغاط وانفجار بولينجر، ارتداد المتوسطات EMA 20/50/200، وانفراجات RSI. دخول مشروط بمصفوفة 100 نقطة (80+ للتأهيل) بدون أي دخول عشوائي.',
     descEn: 'Full synthesis of all SBAA strategy modules: Pin Bar, Engulfing, Stars, Harami, Liquidity Sweeps, Structure BOS/CHOCH, and 100-point scoring',
@@ -140,7 +141,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'auto',
-    nameAr: 'الانتقاء الكمي التلقائي لأفضل استراتيجية (Auto-Select Engine)',
+    nameAr: 'الانتقاء الكمي التلقائي لأفضل استراتيجية',
     nameEn: 'Quant Auto-Select Strategy',
     descAr: 'محرك يختار تلقائياً وبشكل ديناميكي أقوى استراتيجية مؤهلة للسوق الحالي بدون تعارض اتجاهي',
     descEn: 'Dynamically selects the highest probability qualified strategy fitting the current market regime',
@@ -148,7 +149,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'confluence',
-    nameAr: 'توافق الاستراتيجيات الشامل (Confluence Matrix)',
+    nameAr: 'مصفوفة توافق الاستراتيجيات الشامل',
     nameEn: 'Strategy Confluence Matrix',
     descAr: 'تحليل إجماع متعدد الخوارزميات يجمع كافة المؤشرات والاستراتيجيات مع حماية التعارض',
     descEn: 'Multi-algorithm consensus combining quantitative strategies with conflict protection',
@@ -156,7 +157,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'ema_trend',
-    nameAr: 'متابعة اتجاه المتوسطات (EMA 9 / 21 / 200)',
+    nameAr: 'اتجاه المتوسطات المتحركة EMA 9/21/200',
     nameEn: 'EMA Trend Following',
     descAr: 'فلترة الاتجاه العام عبر EMA 200 والتداول مع تقاطعات وزخم EMA 9 و 21',
     descEn: 'Trend filter via EMA 200 with momentum crossovers and choppiness rejection',
@@ -164,7 +165,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'macd',
-    nameAr: 'مؤشر الماكد والزخم (MACD Crossover & Histogram)',
+    nameAr: 'مؤشر الماكد وتوسع الزخم MACD',
     nameEn: 'MACD Momentum',
     descAr: 'تقاطع خط الماكد مع خط الإشارة وتوسع أعمدة الهيستوجرام مع الاتجاه',
     descEn: 'MACD signal line cross with histogram expansion momentum',
@@ -172,7 +173,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'rsi_momentum',
-    nameAr: 'زخم مؤشر القوة النسبية (RSI Momentum)',
+    nameAr: 'زخم مؤشر القوة النسبية RSI',
     nameEn: 'RSI Momentum',
     descAr: 'تأكيد قوة الاتجاه واختراق مستويات الزخم 50 / 60 مع ترند قوي',
     descEn: 'RSI momentum trend continuation confirmation',
@@ -180,7 +181,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'rsi_reversal',
-    nameAr: 'انعكاس تشبعات القوة النسبية (RSI Reversal)',
+    nameAr: 'انعكاس تشبعات القوة النسبية RSI',
     nameEn: 'RSI Overbought/Oversold Reversal',
     descAr: 'اقتناص الارتداد من مناطق التشبع البيعي (<30) والشرائي (>70)',
     descEn: 'Mean reversion from extreme oversold/overbought conditions',
@@ -188,7 +189,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'bollinger_bounce',
-    nameAr: 'ارتداد وانفجار بولينجر باند (Bollinger Bands Bounce)',
+    nameAr: 'ارتداد وانفجار بولينجر باند',
     nameEn: 'Bollinger Bands Mean Reversion',
     descAr: 'اقتناص الارتداد من الحواف مع كشف الانضغاط (Squeeze) وتأكيد اتجاه الشموع',
     descEn: 'Band boundary rejection with volatility squeeze detection and candle verification',
@@ -196,7 +197,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'support_resistance',
-    nameAr: 'الدعوم والمقاومات الأفقية (S/R Clustering)',
+    nameAr: 'مناطق الدعوم والمقاومات الأفقية',
     nameEn: 'Support & Resistance Key Levels',
     descAr: 'تجميع القمم والقيعان في مناطق ارتداد رئيسية وتأكيد ملامسة المستويات',
     descEn: 'Swing clustering into high-probability zones with touch count validation',
@@ -204,7 +205,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'breakout',
-    nameAr: 'استراتيجية الاختراق السعري (Donchian Breakout)',
+    nameAr: 'الاختراق السعري Donchian Breakout',
     nameEn: 'Range Breakout with ATR Momentum',
     descAr: 'اقتناص كسر القمم والقيعان مع إغلاق شمعة زخم كاملة وتأكيد ATR',
     descEn: 'Boundary breakout with candle body ratio >= 60% and ATR momentum expansion',
@@ -212,7 +213,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'candlestick_pattern',
-    nameAr: 'نماذج الشموع اليابانية المتقدمة (Candlestick Patterns Engine)',
+    nameAr: 'نماذج الشموع اليابانية المتقدمة',
     nameEn: 'Candlestick Pattern Engine',
     descAr: 'كشف دقيق لنماذج Pin Bar, Engulfing, Morning/Evening Star, Doji',
     descEn: 'High-precision algorithmic detection of Japanese candlestick reversal formations',
@@ -220,7 +221,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'price_action',
-    nameAr: 'سلوك البرايس أكشن النقي (Pure Price Action)',
+    nameAr: 'سلوك السعر النقي Price Action',
     nameEn: 'Pure Price Action Action',
     descAr: 'تحليل سلوك الذيول والأجسام والتصريف والتجميع عند مستويات الدعم والمقاومة',
     descEn: 'Wick rejection, body ratio analysis, and accumulation/distribution price action',
@@ -228,7 +229,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'market_structure',
-    nameAr: 'هيكل السوق ومفاهيم الأموال الذكية (Market Structure / SMC)',
+    nameAr: 'هيكل السوق والأموال الذكية SMC',
     nameEn: 'Market Structure & Smart Money (SMC)',
     descAr: 'كشف كسر الهيكل (BOS)، وتغير الطابع (CHoCH)، ومناطق كتل الأوامر المؤسسية (Order Blocks)',
     descEn: 'Break of Structure (BOS), Change of Character (CHoCH), Order Blocks, and FVG',
@@ -236,7 +237,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'adx_trend',
-    nameAr: 'قوة واتجاه الترند (ADX Trend Direction)',
+    nameAr: 'قوة واتجاه الترند ADX',
     nameEn: 'ADX Trend Direction',
     descAr: 'قياس قوة الترند مع تقاطع مؤشرات الاتجاه الموجب والسالب (+DI / -DI)',
     descEn: 'Quantifies trend strength when ADX > 25 with directional index alignment',
@@ -244,7 +245,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'supertrend',
-    nameAr: 'مؤشر سوبر تريند المطور (SuperTrend 10, 3)',
+    nameAr: 'مؤشر سوبر تريند SuperTrend',
     nameEn: 'SuperTrend Trend Filter',
     descAr: 'متابعة اتجاه السعر فوق وتحت خط السوبر تريند المستند لتقلبات ATR',
     descEn: 'Dynamic ATR-based trailing trend stop confirming bullish or bearish regime',
@@ -252,7 +253,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'stochastic',
-    nameAr: 'مذبذب ستوكاستيك للتشبع (Stochastic 14, 3, 3)',
+    nameAr: 'مذبذب ستوكاستيك Stochastic 14/3/3',
     nameEn: 'Stochastic Oscillator',
     descAr: 'تقاطع خطوط %K و %D في مناطق التشبع الشرائي والبيعي',
     descEn: 'Stochastic crossover in oversold/overbought extremes with trend confluence',
@@ -260,7 +261,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'cci_strategy',
-    nameAr: 'مؤشر قناة السلع (Commodity Channel Index - CCI)',
+    nameAr: 'مؤشر قناة السلع CCI',
     nameEn: 'Commodity Channel Index',
     descAr: 'رصد الانحرافات المعيارية واختراق مستويات +/- 100 لتحديد بداية الموجات',
     descEn: 'Statistical mean deviation tracking with +/-100 threshold triggers',
@@ -268,7 +269,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'parabolic_sar',
-    nameAr: 'سار المكافئ لنقاط الانعكاس (Parabolic SAR)',
+    nameAr: 'نقاط الانعكاس Parabolic SAR',
     nameEn: 'Parabolic SAR Acceleration',
     descAr: 'تحديد نقاط تحول وتسارع الاتجاه عبر تنقل نقاط SAR أعلى أو أسفل الشموع',
     descEn: 'Trailing stop-and-reverse acceleration points tracking active trends',
@@ -276,7 +277,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'ichimoku_cloud',
-    nameAr: 'سحابة إيشيموكو كينكو هيو (Ichimoku Cloud)',
+    nameAr: 'سحابة إيشيموكو Ichimoku Cloud',
     nameEn: 'Ichimoku Kinko Hyo',
     descAr: 'توافق خط التحول (Tenkan) وخط الأساس (Kijun) مع موقع السعر فوق أو تحت السحابة (Kumo)',
     descEn: 'Tenkan/Kijun cross with Kumo cloud sentiment alignment',
@@ -284,7 +285,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'pivot_point',
-    nameAr: 'نقاط الارتكاز والمحاور الكلاسيكية (Pivot Points)',
+    nameAr: 'نقاط الارتكاز الكلاسيكية Pivot',
     nameEn: 'Classic Floor Pivot Points',
     descAr: 'مستويات الدعم والمقاومة اليومية والمحورية (P, R1, R2, S1, S2)',
     descEn: 'Daily mathematical equilibrium and institutional bounce zones',
@@ -292,7 +293,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'fibonacci',
-    nameAr: 'تصحيحات فيبوناتشي الذهبية (Fibonacci Retracement 61.8%)',
+    nameAr: 'تصحيحات فيبوناتشي الذهبية 61.8%',
     nameEn: 'Fibonacci Golden Ratio',
     descAr: 'اقتناص الارتداد من النسبة الذهبية 61.8% و 50% بعد الموجات الدافعة',
     descEn: 'High-probability golden pocket (50% - 61.8%) pullback entries',
@@ -300,7 +301,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'atr_volatility',
-    nameAr: 'توسع النطاق وتقلبات ATR (ATR Volatility Expansion)',
+    nameAr: 'توسع النطاق وتقلبات ATR',
     nameEn: 'ATR Volatility Expansion',
     descAr: 'رصد انفجارات السيولة وتوسع المدى السعري الحقيقي فوق المتوسط',
     descEn: 'Explosive volatility breakouts confirming strong directional thrust',
@@ -308,7 +309,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'volume_flow',
-    nameAr: 'تدفق الأحجام والسيولة (Volume Flow Analysis)',
+    nameAr: 'تدفق الأحجام والسيولة Volume',
     nameEn: 'Volume Flow Analysis',
     descAr: 'تأكيد حركة السعر بواسطة صعود أو هبوط حجم التداول الفعلي',
     descEn: 'Tick volume impulse confirming true institutional participation',
@@ -316,7 +317,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'darvas_box',
-    nameAr: 'نظرية صناديق دارفاس (Darvas Box Breakout)',
+    nameAr: 'اختراق صناديق دارفاس Darvas Box',
     nameEn: 'Darvas Box Breakout',
     descAr: 'تحديد قنوات التجميع المغلقة والدخول عند اختراق سقف أو أرضية الصندوق',
     descEn: 'Box boundary breakout catching fresh continuation runs',
@@ -324,7 +325,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'elliott_wave',
-    nameAr: 'موجات إليوت السعرية (Elliott Wave Principle)',
+    nameAr: 'موجات إليوت السعرية Elliott Wave',
     nameEn: 'Elliott Wave Count',
     descAr: 'التعرف على الموجات الدافعة 1-2-3-4-5 والموجات التصحيحية A-B-C',
     descEn: 'Fractal wave count recognizing structural impulsive expansions',
@@ -332,7 +333,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'gann_price_time',
-    nameAr: 'هندسة جان للسعر والزمن (Gann Price & Time Geometry)',
+    nameAr: 'هندسة جان للسعر والزمن Gann',
     nameEn: 'Gann Angles & Time Geometry',
     descAr: 'زوايا جان الهندسية 1x1 و 2x1 وتوافق دورات الزمن مع مستويات السعر',
     descEn: 'Gann square and angle geometry finding hidden harmonious turning points',
@@ -340,7 +341,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'multi_confluence',
-    nameAr: 'التوافق المتعدد والمؤشرات المركبة (Multi-Confluence Engine)',
+    nameAr: 'التوافق المتعدد للمؤشرات المركبة',
     nameEn: 'Multi-Confluence Engine',
     descAr: 'توليفة رياضية مركبة تفحص اتجاه ومومنتوم وتذبذب 7 مؤشرات في آن واحد',
     descEn: 'Multi-indicator scoring matrix requiring multi-layer agreement',
@@ -348,7 +349,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'sma_crossover',
-    nameAr: 'التقاطع الذهبي للمتوسطات (SMA Golden / Death Cross)',
+    nameAr: 'التقاطع الذهبي للمتوسطات SMA',
     nameEn: 'SMA Golden & Death Cross',
     descAr: 'تقاطع المتوسط البسيط 20 مع 50 للاتجاه متوسط المدى',
     descEn: 'Classic SMA 20 / 50 trend confirmation',
@@ -356,7 +357,7 @@ const STRATEGIES_LIST = [
   },
   {
     id: 'ma_alignment',
-    nameAr: 'اصطفاف المتوسطات المتحركة (Moving Average Alignment)',
+    nameAr: 'اصطفاف المتوسطات المتحركة MA',
     nameEn: 'Moving Average Alignment',
     descAr: 'اصطفاف متتالي لمتوسطات 10 > 20 > 50 > 200 لتأكيد أقوى اتجاه صاعد أو هابط',
     descEn: 'Sequential MA stacking confirming strongest directional momentum',
@@ -402,7 +403,6 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
   const [takeProfit, setTakeProfit] = useState<number>(40);
   const [enableMartingale, setEnableMartingale] = useState<boolean>(false);
   const [martingaleMultiplier, setMartingaleMultiplier] = useState<number>(2.0);
-  const useDemo = false;
 
   // Test Connection Modal
   const [showConnModal, setShowConnModal] = useState<boolean>(false);
@@ -417,6 +417,10 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
 
   // Detailed Trade Inspection Modal
   const [selectedTradeDetail, setSelectedTradeDetail] = useState<DetailedTradeRecord | null>(null);
+  const [clearingTrades, setClearingTrades] = useState<boolean>(false);
+  const [confirmClearTrades, setConfirmClearTrades] = useState<boolean>(false);
+  const [clearingLogs, setClearingLogs] = useState<boolean>(false);
+  const [confirmClearLogs, setConfirmClearLogs] = useState<boolean>(false);
 
   const showToast = (type: 'success' | 'error' | 'info', text: string) => {
     setToastMsg({ type, text });
@@ -535,6 +539,7 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
         isDemo: false,
         enableMartingale,
         martingaleMultiplier,
+        displayTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       };
 
       const res = await fetch('/api/autotrader/start', {
@@ -631,6 +636,7 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
           isDemo: false,
           enableMartingale,
           martingaleMultiplier,
+          displayTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
       });
       const data = await res.json();
@@ -651,6 +657,39 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
       showToast('info', isRTL ? 'تم تصفير إحصاءات اليوم وقاطع الدائرة' : 'Daily stats and circuit breaker reset');
     } catch (err: any) {
       console.error(err);
+    }
+  };
+
+  const handleClearTrades = async () => {
+    setClearingTrades(true);
+    try {
+      const res = await fetch('/api/autotrader/clear-trades', { method: 'POST' });
+      const data = await res.json();
+      if (data.status) setStatus(data.status);
+      setConfirmClearTrades(false);
+      showToast(
+        'info',
+        data.message || (isRTL ? 'تم مسح قائمة الصفقات بنجاح' : 'Order list cleared successfully')
+      );
+    } catch (err: any) {
+      showToast('error', err?.message || (isRTL ? 'تعذر مسح قائمة الصفقات' : 'Failed to clear order list'));
+    } finally {
+      setClearingTrades(false);
+    }
+  };
+
+  const handleClearLogs = async () => {
+    setClearingLogs(true);
+    try {
+      const res = await fetch('/api/autotrader/clear-logs', { method: 'POST' });
+      const data = await res.json();
+      if (data.status) setStatus(data.status);
+      setConfirmClearLogs(false);
+      showToast('info', data.message || (isRTL ? 'تم مسح سجل العمليات بنجاح' : 'Audit logs cleared'));
+    } catch (err: any) {
+      showToast('error', err?.message || (isRTL ? 'تعذر مسح السجل' : 'Failed to clear logs'));
+    } finally {
+      setClearingLogs(false);
     }
   };
 
@@ -745,11 +784,23 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
             ) : (
               <button
                 onClick={handleStart}
-                disabled={actionLoading || isEmergency || isBreakerTripped}
+                disabled={actionLoading}
                 className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-950/60 cursor-pointer disabled:opacity-50"
               >
                 <Play className="w-4 h-4 fill-white" />
                 <span>{isRTL ? 'تشغيل البوت' : 'Start Bot'}</span>
+              </button>
+            )}
+
+            {isBreakerTripped && !isRunning && (
+              <button
+                type="button"
+                onClick={handleResetPnL}
+                disabled={actionLoading}
+                className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition-all shadow-lg shadow-amber-950/40 cursor-pointer disabled:opacity-50"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>{isRTL ? 'فك القاطع وتصفير اليوم' : 'Unlock & Reset'}</span>
               </button>
             )}
 
@@ -869,6 +920,27 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
             <span>{isRTL ? 'المرفوضة:' : 'Rejected:'} <strong className="text-rose-400">{status?.rejectedTradesCount ?? 0}</strong></span>
           </div>
         </div>
+
+        {isBreakerTripped && (
+          <div className="mt-3 p-3 rounded-xl bg-rose-950/40 border border-rose-500/40 flex flex-wrap items-center justify-between gap-2 text-xs text-rose-200 relative z-10">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>
+                <strong>{isRTL ? 'قاطع الدائرة مفعل:' : 'Circuit Breaker Active:'}</strong>{' '}
+                {status?.circuitBreakerReason || (isRTL ? 'تم بلوغ الحد اليومي للربح أو الخسارة.' : 'Daily risk limit reached.')}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleResetPnL}
+              disabled={actionLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-[11px] transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>{isRTL ? 'تصفير وفك القاطع الآن' : 'Reset & Unlock Now'}</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Toast Notification */}
@@ -1148,7 +1220,7 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
                   <input
                     type="number"
                     min="5"
-                    max="500"
+                    max="5000"
                     value={stopLoss}
                     onChange={(e) => setStopLoss(Math.max(5, Number(e.target.value)))}
                     disabled={isRunning}
@@ -1167,7 +1239,7 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
                   <input
                     type="number"
                     min="5"
-                    max="1000"
+                    max="5000"
                     value={takeProfit}
                     onChange={(e) => setTakeProfit(Math.max(5, Number(e.target.value)))}
                     disabled={isRunning}
@@ -1285,16 +1357,51 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
 
             {/* Live Order Lifecycle & Trades */}
             <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 space-y-3 backdrop-blur-sm">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
                 <div className="flex items-center gap-2">
                   <Activity className="w-4 h-4 text-emerald-400" />
                   <h4 className="font-bold text-xs text-slate-200 uppercase tracking-wider">
                     {isRTL ? 'تدفق الأوامر والصفقات المنفذة (Order Lifecycle)' : 'Real Order Lifecycle & Trades'}
                   </h4>
                 </div>
-                <span className="text-[10px] font-mono text-slate-400">
-                  {status?.recentTrades?.length || 0} {isRTL ? 'صفقة' : 'orders'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono text-slate-400">
+                    {status?.recentTrades?.length || 0} {isRTL ? 'صفقة' : 'orders'}
+                  </span>
+                  {confirmClearTrades ? (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={handleClearTrades}
+                        disabled={clearingTrades}
+                        className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        {clearingTrades
+                          ? isRTL ? 'جاري المسح...' : 'Clearing...'
+                          : isRTL ? 'تأكيد المسح' : 'Confirm'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmClearTrades(false)}
+                        disabled={clearingTrades}
+                        className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[10px] font-semibold transition-colors cursor-pointer"
+                      >
+                        {isRTL ? 'إلغاء' : 'Cancel'}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmClearTrades(true)}
+                      disabled={!status?.recentTrades || status.recentTrades.length === 0}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-bold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      title={isRTL ? 'مسح قائمة الصفقات' : 'Clear trades list'}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>{isRTL ? 'مسح' : 'Clear'}</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="overflow-x-auto">
@@ -1320,7 +1427,7 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
                               id: trade.id,
                               ticketId: trade.ticketId || trade.id,
                               asset: trade.asset,
-                              accountMode: useDemo ? 'DEMO' : 'REAL',
+                              accountMode: 'REAL',
                               timeframe: effectiveDuration,
                               strategyName: trade.strategy || 'توافق الاستراتيجيات (Confluence Matrix)',
                               action: trade.action,
@@ -1596,16 +1703,51 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
       {/* ==================== TAB 3: AUDIT LOGS ==================== */}
       {activeTab === 'logs' && (
         <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-4 backdrop-blur-md">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
             <div className="flex items-center gap-2">
               <FileText className="w-5 h-5 text-indigo-400" />
               <h4 className="font-bold text-sm text-slate-200">
                 {isRTL ? 'سجل العمليات والتدقيق الأمني المباشر (Audit Log)' : 'Live Operational & Security Audit Trail'}
               </h4>
             </div>
-            <span className="text-[10px] font-mono text-slate-400">
-              {status?.recentLogs?.length || 0} {isRTL ? 'حدث مسجل' : 'events'}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono text-slate-400">
+                {status?.recentLogs?.length || 0} {isRTL ? 'حدث مسجل' : 'events'}
+              </span>
+              {confirmClearLogs ? (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={handleClearLogs}
+                    disabled={clearingLogs}
+                    className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {clearingLogs
+                      ? isRTL ? 'جاري المسح...' : 'Clearing...'
+                      : isRTL ? 'تأكيد المسح' : 'Confirm'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmClearLogs(false)}
+                    disabled={clearingLogs}
+                    className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[10px] font-semibold transition-colors cursor-pointer"
+                  >
+                    {isRTL ? 'إلغاء' : 'Cancel'}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmClearLogs(true)}
+                  disabled={!status?.recentLogs || status.recentLogs.length === 0}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-bold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  title={isRTL ? 'مسح السجل' : 'Clear audit logs'}
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>{isRTL ? 'مسح' : 'Clear'}</span>
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="h-96 overflow-y-auto space-y-2 font-mono text-xs pr-1">

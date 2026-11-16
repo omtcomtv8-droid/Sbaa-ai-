@@ -1,5 +1,22 @@
 [
   {
+    "id": "log_1794855700850_eoa7d6",
+    "timestamp": "2026-11-16T19:01:40.850Z",
+    "action": "USER_ACTIVATION_SUCCESS",
+    "actor": "user:user@sabaa.trader",
+    "details": {
+      "code": "SBAA0000",
+      "isMasterAdmin": true,
+      "role": "admin",
+      "durationHours": 876000,
+      "expiresAt": "2126-09-07T00:59:53.967Z",
+      "activeDevices": 1,
+      "maxDevices": 100,
+      "ip": "127.0.0.1"
+    },
+    "ipAddress": "127.0.0.1"
+  },
+  {
     "id": "log_1791452644341_iz8va0",
     "timestamp": "2026-10-08T09:44:04.341Z",
     "action": "ADMIN_LOGIN_SUCCESS",

@@ -14,7 +14,7 @@ test('TEST 1: SINGLE WORKER ENFORCEMENT & IDEMPOTENT BOT START', () => {
   const candleBuilder = new CandleBuilder();
   const poService = new PocketOptionService(candleBuilder);
   const strategyEngine = new StrategyEngine();
-  const autoTrader = new AutoTraderEngine(strategyEngine, poService);
+  const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, undefined, undefined, candleBuilder, false);
 
   const startRes1 = autoTrader.start({ baseAmount: 10, timeframe: 60 });
   assert.equal(startRes1.success, true);
@@ -67,7 +67,7 @@ test('TEST 3: IN-PLACE DEAL UPDATES AND TRANSITION PROTECTION IN ENGINE', () => 
   const candleBuilder = new CandleBuilder();
   const poService = new PocketOptionService(candleBuilder);
   const strategyEngine = new StrategyEngine();
-  const autoTrader = new AutoTraderEngine(strategyEngine, poService);
+  const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, undefined, undefined, candleBuilder, false);
 
   // Manually insert an initial trade record to verify transitions
   const tradeId = 'at_test_1001';
@@ -130,7 +130,7 @@ test('TEST 4: DEAL CLOSURE DEDUPLICATION & ZERO DOUBLE-COUNTING PNL', () => {
   const candleBuilder = new CandleBuilder();
   const poService = new PocketOptionService(candleBuilder);
   const strategyEngine = new StrategyEngine();
-  const autoTrader = new AutoTraderEngine(strategyEngine, poService);
+  const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, undefined, undefined, candleBuilder, false);
 
   // Reset daily PnL to baseline 0 for clean testing
   autoTrader.resetPnL();
@@ -177,7 +177,7 @@ test('TEST 5: CANDLE TIMESTAMP ANCHORED IDEMPOTENCY KEY BLOCKS TICK FLOODING', a
   const candleBuilder = new CandleBuilder();
   const poService = new PocketOptionService(candleBuilder);
   const strategyEngine = new StrategyEngine();
-  const autoTrader = new AutoTraderEngine(strategyEngine, poService);
+  const autoTrader = new AutoTraderEngine(strategyEngine, poService, undefined, undefined, undefined, candleBuilder, false);
 
   autoTrader.start({
     strategyId: 'confluence',

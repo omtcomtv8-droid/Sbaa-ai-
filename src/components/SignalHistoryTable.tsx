@@ -13,26 +13,32 @@ import {
   DollarSign,
   Activity,
   ExternalLink,
+  Trash2,
 } from 'lucide-react';
 import { Signal } from '../types';
 import { useLanguage } from '../i18n/LanguageContext';
 import { TradeDetailModal, DetailedTradeRecord } from './TradeDetailModal';
 import { tradeHistoryStorage } from '../services/TradeHistoryStorage';
+import { auth } from '../lib/firebase';
 
 interface SignalHistoryTableProps {
   history: Signal[];
   onSelectSignal?: (signal: Signal) => void;
+  onClearSignals?: (performance?: any) => void;
 }
 
 export const SignalHistoryTable: React.FC<SignalHistoryTableProps> = ({
   history,
   onSelectSignal,
+  onClearSignals,
 }) => {
   const { t, tTerm, tDynamic, isRTL } = useLanguage();
   const [activeTab, setActiveTab] = useState<'SIGNALS' | 'DEALS'>('DEALS');
   const [filter, setFilter] = useState<'ALL' | 'BUY' | 'SELL' | 'WON' | 'LOST' | 'DRAW'>('ALL');
   const [deals, setDeals] = useState<DetailedTradeRecord[]>([]);
   const [selectedTrade, setSelectedTrade] = useState<DetailedTradeRecord | null>(null);
+  const [confirmClear, setConfirmClear] = useState<boolean>(false);
+  const [clearing, setClearing] = useState<boolean>(false);
 
   // Subscribe to real-time executed broker deals
   useEffect(() => {
@@ -41,6 +47,24 @@ export const SignalHistoryTable: React.FC<SignalHistoryTableProps> = ({
     });
     return unsub;
   }, []);
+
+  const hasItemsInActiveTab = activeTab === 'DEALS' ? deals.length > 0 : history.length > 0;
+
+  const handleClearCurrentList = async () => {
+    setClearing(true);
+    try {
+      if (activeTab === 'DEALS') {
+        await tradeHistoryStorage.clearTrades(auth.currentUser?.uid);
+      } else {
+        const res = await fetch('/api/history/clear', { method: 'POST' });
+        const data = await res.json().catch(() => ({}));
+        onClearSignals?.(data?.performance);
+      }
+      setConfirmClear(false);
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const completed = history.filter((s) => s.status === 'WON' || s.status === 'LOST');
   const wonCount = history.filter((s) => s.status === 'WON').length;
@@ -85,11 +109,15 @@ export const SignalHistoryTable: React.FC<SignalHistoryTableProps> = ({
           </div>
         </div>
 
-        {/* Tab Switcher: Executed Deals vs Signals */}
-        <div className="flex items-center gap-2">
+        {/* Tab Switcher: Executed Deals vs Signals + Clear List */}
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
             <button
-              onClick={() => setActiveTab('DEALS')}
+              type="button"
+              onClick={() => {
+                setActiveTab('DEALS');
+                setConfirmClear(false);
+              }}
               className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
                 activeTab === 'DEALS'
                   ? 'bg-indigo-600 text-white shadow-sm'
@@ -100,7 +128,11 @@ export const SignalHistoryTable: React.FC<SignalHistoryTableProps> = ({
               <span>{isRTL ? `الصفقات المنفذة (${deals.length})` : `Executed Deals (${deals.length})`}</span>
             </button>
             <button
-              onClick={() => setActiveTab('SIGNALS')}
+              type="button"
+              onClick={() => {
+                setActiveTab('SIGNALS');
+                setConfirmClear(false);
+              }}
               className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
                 activeTab === 'SIGNALS'
                   ? 'bg-blue-600 text-white shadow-sm'
@@ -111,6 +143,40 @@ export const SignalHistoryTable: React.FC<SignalHistoryTableProps> = ({
               <span>{isRTL ? `إشارات الاستراتيجيات (${history.length})` : `Signals (${history.length})`}</span>
             </button>
           </div>
+
+          {confirmClear ? (
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleClearCurrentList}
+                disabled={clearing}
+                className="px-2.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {clearing
+                  ? isRTL ? 'جاري المسح...' : 'Clearing...'
+                  : isRTL ? 'تأكيد المسح' : 'Confirm'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmClear(false)}
+                disabled={clearing}
+                className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px] font-semibold transition-colors cursor-pointer"
+              >
+                {isRTL ? 'إلغاء' : 'Cancel'}
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmClear(true)}
+              disabled={!hasItemsInActiveTab}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[11px] font-bold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              title={isRTL ? 'مسح القائمة الحالية' : 'Clear current list'}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>{isRTL ? 'مسح' : 'Clear'}</span>
+            </button>
+          )}
         </div>
       </div>
 

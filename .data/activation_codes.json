@@ -7,14 +7,14 @@
     "durationLabel": "Lifetime (Master Administrator)",
     "maxDevices": 100,
     "activeDevicesCount": 1,
-    "boundUserId": "test_arabic_admin_uid",
-    "boundUserEmail": "arabic_admin@platform.com",
+    "boundUserId": "user_1794855700847",
+    "boundUserEmail": "user@sabaa.trader",
     "createdAt": "2026-10-01T00:59:53.967Z",
     "createdBy": "system_root_admin",
-    "updatedAt": "2026-10-08T09:44:03.438Z",
+    "updatedAt": "2026-11-16T19:01:40.848Z",
     "expiresAt": "2126-09-07T00:59:53.967Z",
     "activatedAt": "2026-10-01T00:59:53.969Z",
-    "lastUsageAt": "2026-10-08T09:44:03.438Z"
+    "lastUsageAt": "2026-11-16T19:01:40.848Z"
   },
   "code_1791106560861_c0290f63": {
     "id": "code_1791106560861_c0290f63",
@@ -72,14 +72,14 @@
     "durationLabel": "Lifetime (Master Administrator)",
     "maxDevices": 100,
     "activeDevicesCount": 1,
-    "boundUserId": "test_arabic_admin_uid",
-    "boundUserEmail": "arabic_admin@platform.com",
+    "boundUserId": "user_1794855700847",
+    "boundUserEmail": "user@sabaa.trader",
     "createdAt": "2026-10-01T00:59:53.967Z",
     "createdBy": "system_root_admin",
-    "updatedAt": "2026-10-08T09:44:03.438Z",
+    "updatedAt": "2026-11-16T19:01:40.848Z",
     "expiresAt": "2126-09-07T00:59:53.967Z",
     "activatedAt": "2026-10-01T00:59:53.969Z",
-    "lastUsageAt": "2026-10-08T09:44:03.438Z"
+    "lastUsageAt": "2026-11-16T19:01:40.848Z"
   },
   "SABAA0000": {
     "id": "code_master_sbaa0000",
@@ -89,13 +89,13 @@
     "durationLabel": "Lifetime (Master Administrator)",
     "maxDevices": 100,
     "activeDevicesCount": 1,
-    "boundUserId": "test_arabic_admin_uid",
-    "boundUserEmail": "arabic_admin@platform.com",
+    "boundUserId": "user_1794855700847",
+    "boundUserEmail": "user@sabaa.trader",
     "createdAt": "2026-10-01T00:59:53.967Z",
     "createdBy": "system_root_admin",
-    "updatedAt": "2026-10-08T09:44:03.438Z",
+    "updatedAt": "2026-11-16T19:01:40.848Z",
     "expiresAt": "2126-09-07T00:59:53.967Z",
     "activatedAt": "2026-10-01T00:59:53.969Z",
-    "lastUsageAt": "2026-10-08T09:44:03.438Z"
+    "lastUsageAt": "2026-11-16T19:01:40.848Z"
   }
 }

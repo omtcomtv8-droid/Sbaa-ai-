@@ -41,7 +41,7 @@ export const MobileInstallBanner: React.FC<MobileInstallBannerProps> = ({ onOpen
           </div>
           <div className="min-w-0">
             <div className="text-xs font-bold text-slate-100 flex items-center gap-1.5 truncate">
-              <span>{t('install.bannerTitle', 'تطبيق SABAA AI للهاتف')}</span>
+              <span>{t('install.bannerTitle', 'تطبيق SABAA QUANT للهاتف')}</span>
               <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-400">
                 PWA
               </span>

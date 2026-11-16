@@ -1410,6 +1410,10 @@ export default function App() {
             <SignalHistoryTable
               history={signalHistory}
               onSelectSignal={(sig) => setSelectedModalSignal(sig)}
+              onClearSignals={(perf) => {
+                setSignalHistory([]);
+                if (perf) setPerformance(perf);
+              }}
             />
           </div>
         )}
@@ -1529,6 +1533,10 @@ export default function App() {
             <SignalHistoryTable
               history={signalHistory}
               onSelectSignal={(sig) => setSelectedModalSignal(sig)}
+              onClearSignals={(perf) => {
+                setSignalHistory([]);
+                if (perf) setPerformance(perf);
+              }}
             />
           </div>
         )}

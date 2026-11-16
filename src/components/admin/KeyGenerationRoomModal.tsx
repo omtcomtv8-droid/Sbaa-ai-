@@ -73,6 +73,8 @@ export const KeyGenerationRoomModal: React.FC<KeyGenerationRoomModalProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [newlyGenerated, setNewlyGenerated] = useState<any[]>([]);
   const [roomSuccessMessage, setRoomSuccessMessage] = useState<string | null>(null);
+  const [roomErrorMessage, setRoomErrorMessage] = useState<string | null>(null);
+  const [confirmingRevokeId, setConfirmingRevokeId] = useState<string | null>(null);
 
   // Telegram Bot State
   const [telegramStatus, setTelegramStatus] = useState<TelegramStatus | null>(null);
@@ -172,26 +174,11 @@ export const KeyGenerationRoomModal: React.FC<KeyGenerationRoomModalProps> = ({
           onAdminAuthenticated(data.token);
         }
       } else {
-        // Fallback: Use verified master session token for room
-        const masterToken = 'sbaa0000';
-        setToken(masterToken);
-        setIsUnlocked(true);
-        safeStorage.setSessionItem('sabaa_keyroom_unlocked', 'true');
-        safeStorage.setSessionItem('sabaa_admin_token', masterToken);
-        if (onAdminAuthenticated) {
-          onAdminAuthenticated(masterToken);
-        }
+        setGateError(data.error || (isRTL ? 'فشل التحقق من كلمة مرور الغرفة' : 'Failed to authenticate admin gate'));
       }
     } catch {
       setIsVerifyingGate(false);
-      const masterToken = 'sbaa0000';
-      setToken(masterToken);
-      setIsUnlocked(true);
-      safeStorage.setSessionItem('sabaa_keyroom_unlocked', 'true');
-      safeStorage.setSessionItem('sabaa_admin_token', masterToken);
-      if (onAdminAuthenticated) {
-        onAdminAuthenticated(masterToken);
-      }
+      setGateError(isRTL ? 'تعذر الاتصال بخادم التحقق الإداري' : 'Unable to reach admin authentication server');
     }
   };
 
@@ -200,6 +187,7 @@ export const KeyGenerationRoomModal: React.FC<KeyGenerationRoomModalProps> = ({
     e.preventDefault();
     setIsGenerating(true);
     setRoomSuccessMessage(null);
+    setRoomErrorMessage(null);
 
     let durationHours = 720;
     let exactDateIso: string | undefined = undefined;
@@ -207,7 +195,7 @@ export const KeyGenerationRoomModal: React.FC<KeyGenerationRoomModalProps> = ({
     if (durationType === 'exact') {
       if (!exactExpiration) {
         setIsGenerating(false);
-        alert(isRTL ? 'يرجى تحديد تاريخ ووقت الانتهاء.' : 'Please select expiration date and time.');
+        setRoomErrorMessage(isRTL ? 'يرجى تحديد تاريخ ووقت الانتهاء.' : 'Please select expiration date and time.');
         return;
       }
       exactDateIso = new Date(exactExpiration).toISOString();
@@ -242,16 +230,16 @@ export const KeyGenerationRoomModal: React.FC<KeyGenerationRoomModalProps> = ({
         setNewlyGenerated(data.codes);
         setRoomSuccessMessage(
           isRTL
-            ? `✅ تم توليد ${data.codes.length} مفتاح ترخيص بنجاح وربطها بنظام التفعيل وبوت التلجرام!`
-            : `✅ Successfully generated ${data.codes.length} license key(s) linked to Telegram Bot API!`
+            ? `تم توليد ${data.codes.length} مفتاح ترخيص بنجاح وربطها بنظام التفعيل وبوت التلجرام!`
+            : `Successfully generated ${data.codes.length} license key(s) linked to Telegram Bot API!`
         );
         loadCodes();
       } else {
-        alert(data.error || 'Failed to generate codes');
+        setRoomErrorMessage(data.error || (isRTL ? 'فشل توليد المفاتيح' : 'Failed to generate codes'));
       }
     } catch (err: any) {
       setIsGenerating(false);
-      alert(err?.message || 'Error communicating with key generator service');
+      setRoomErrorMessage(err?.message || (isRTL ? 'خطأ أثناء الاتصال بمولد المفاتيح' : 'Error communicating with key generator service'));
     }
   };
 
@@ -265,6 +253,8 @@ export const KeyGenerationRoomModal: React.FC<KeyGenerationRoomModalProps> = ({
   // Share key to Telegram
   const handleShareKeyToTelegram = async (codeItem: any) => {
     setSharingCodeId(codeItem.id);
+    setRoomSuccessMessage(null);
+    setRoomErrorMessage(null);
     const res = await telegramService.shareKeyToTelegram({
       code: codeItem.code,
       durationLabel: codeItem.durationLabel,
@@ -273,26 +263,29 @@ export const KeyGenerationRoomModal: React.FC<KeyGenerationRoomModalProps> = ({
     });
     setSharingCodeId(null);
     if (res.success) {
-      alert(isRTL ? '✅ تم نشر المفتاح في قناة / بوت التلجرام بنجاح!' : 'Key posted to Telegram successfully!');
+      setRoomSuccessMessage(isRTL ? 'تم نشر المفتاح في قناة / بوت التلجرام بنجاح!' : 'Key posted to Telegram successfully!');
     } else {
-      alert(res.message || 'Failed to share to Telegram');
+      setRoomErrorMessage(res.message || (isRTL ? 'فشل النشر في التلجرام' : 'Failed to share to Telegram'));
     }
   };
 
   // Revoke code
   const handleRevoke = async (codeId: string) => {
-    if (!confirm(isRTL ? 'هل أنت متأكد من إلغاء هذا المفتاح نهائياً؟' : 'Are you sure you want to revoke this key?')) {
-      return;
-    }
+    setConfirmingRevokeId(null);
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers['x-admin-token'] = token;
 
-    await fetch(`/api/admin/codes/${codeId}/revoke`, {
+    const res = await fetch(`/api/admin/codes/${codeId}/revoke`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ reason: 'Revoked from Key Room' }),
     });
-    loadCodes();
+    if (res.ok) {
+      setRoomSuccessMessage(isRTL ? 'تم إلغاء المفتاح بنجاح' : 'Activation key revoked');
+      loadCodes();
+    } else {
+      setRoomErrorMessage(isRTL ? 'تعذر إلغاء المفتاح' : 'Failed to revoke key');
+    }
   };
 
   // Save Telegram config
@@ -302,9 +295,12 @@ export const KeyGenerationRoomModal: React.FC<KeyGenerationRoomModalProps> = ({
     setTelegramTestMessage(null);
 
     const res = await telegramService.updateConfig({
-      botToken: telegramToken || undefined,
-      chatId: telegramChatId || undefined,
+      botToken: telegramToken.trim() || undefined,
+      chatId: telegramChatId.trim() || undefined,
+      enabled: true,
       autoBroadcastSignals: telegramAutoBroadcast,
+      autoBroadcastTrades: telegramAutoBroadcast,
+      displayTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       minConfidence: telegramMinConfidence,
       password: 'sbaa0000',
       adminToken: token || undefined,
@@ -434,6 +430,16 @@ export const KeyGenerationRoomModal: React.FC<KeyGenerationRoomModalProps> = ({
                 </button>
               </div>
             </div>
+
+            {/* Error Notification Banner */}
+            {roomErrorMessage && (
+              <div className="mx-4 sm:mx-6 mt-3 p-3 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-bold flex items-center justify-between gap-2">
+                <span>{roomErrorMessage}</span>
+                <button onClick={() => setRoomErrorMessage(null)} className="text-rose-400 hover:text-rose-200 cursor-pointer">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
 
             {/* Navigation Tabs */}
             <div className="flex items-center gap-2 px-4 sm:px-6 pt-3 border-b border-slate-800 bg-slate-950/40 text-xs font-bold">
@@ -784,13 +790,30 @@ export const KeyGenerationRoomModal: React.FC<KeyGenerationRoomModalProps> = ({
                                       <Send className="w-3.5 h-3.5" />
                                     </button>
                                     {c.status !== 'REVOKED' && (
-                                      <button
-                                        onClick={() => handleRevoke(c.id)}
-                                        className="p-1 text-rose-400 hover:bg-rose-500/20 rounded cursor-pointer"
-                                        title={isRTL ? 'إلغاء المفتاح' : 'Revoke'}
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
+                                      confirmingRevokeId === c.id ? (
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            onClick={() => handleRevoke(c.id)}
+                                            className="px-2 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold cursor-pointer"
+                                          >
+                                            {isRTL ? 'تأكيد' : 'Yes'}
+                                          </button>
+                                          <button
+                                            onClick={() => setConfirmingRevokeId(null)}
+                                            className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] cursor-pointer"
+                                          >
+                                            {isRTL ? 'إلغاء' : 'No'}
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          onClick={() => setConfirmingRevokeId(c.id)}
+                                          className="p-1 text-rose-400 hover:bg-rose-500/20 rounded cursor-pointer"
+                                          title={isRTL ? 'إلغاء المفتاح' : 'Revoke'}
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      )
                                     )}
                                   </div>
                                 </td>

@@ -145,7 +145,7 @@ async function runComprehensiveTests() {
   console.log('\n[PROBLEM 4: ENGINE DEDUPLICATION & STATISTICS RECONCILIATION]');
 
   const stratEngineForTest = new StrategyEngine();
-  const autoEngine = new AutoTraderEngine(stratEngineForTest, poService);
+  const autoEngine = new AutoTraderEngine(stratEngineForTest, poService, undefined, undefined, undefined, undefined, false);
   autoEngine.resetPnL();
 
 

@@ -4,17 +4,17 @@ import { useAuth } from '../hooks/useAuth';
 import { useLanguage } from '../i18n/LanguageContext';
 
 export const UserApiKeySection: React.FC = () => {
-  const { sessionToken, isActivating } = useAuth();
-  const { t, isRTL } = useLanguage();
+  const { sessionToken } = useAuth();
+  const { isRTL } = useLanguage();
 
   const [platformToken, setPlatformToken] = useState('');
   const [accountUid, setAccountUid] = useState('');
-  const [isDemo, setIsDemo] = useState(true);
   const [showToken, setShowToken] = useState(false);
 
   const [savedCreds, setSavedCreds] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   const fetchCreds = async () => {
@@ -30,12 +30,9 @@ export const UserApiKeySection: React.FC = () => {
         if (data.credentials?.accountUid) {
           setAccountUid(data.credentials.accountUid);
         }
-        if (data.credentials?.isDemo !== undefined) {
-          setIsDemo(data.credentials.isDemo);
-        }
       }
     } catch {
-      // ignore
+      // ignore transient network check
     } finally {
       setIsLoading(false);
     }
@@ -67,7 +64,7 @@ export const UserApiKeySection: React.FC = () => {
           platform: 'pocket_option',
           sessionToken: platformToken.trim() || 'preserved',
           accountUid: accountUid.trim(),
-          isDemo,
+          isDemo: false,
         }),
       });
 
@@ -75,21 +72,20 @@ export const UserApiKeySection: React.FC = () => {
       setIsSaving(false);
 
       if (res.ok && data.success) {
-        setMessage({ text: isRTL ? '✅ تم حفظ واعتماد بيانات المنصة بنجاح' : 'Credentials securely saved!', type: 'success' });
+        setMessage({ text: isRTL ? 'تم حفظ واعتماد بيانات الحساب الحقيقي بنجاح' : 'Real account credentials securely saved!', type: 'success' });
         setPlatformToken('');
         fetchCreds();
       } else {
-        setMessage({ text: data.error || 'Failed to save', type: 'error' });
+        setMessage({ text: data.error || (isRTL ? 'تعذر حفظ البيانات' : 'Failed to save'), type: 'error' });
       }
     } catch (err: any) {
       setIsSaving(false);
-      setMessage({ text: err?.message || 'Connection error', type: 'error' });
+      setMessage({ text: err?.message || (isRTL ? 'خطأ في الاتصال بالخادم' : 'Connection error'), type: 'error' });
     }
   };
 
   const handleDelete = async () => {
     if (!sessionToken) return;
-    if (!confirm(isRTL ? 'هل أنت متأكد من حذف بيانات الاعتماد؟' : 'Remove saved credentials?')) return;
 
     try {
       const res = await fetch('/api/auth/credentials', {
@@ -100,10 +96,14 @@ export const UserApiKeySection: React.FC = () => {
         setSavedCreds(null);
         setPlatformToken('');
         setAccountUid('');
+        setConfirmingDelete(false);
         setMessage({ text: isRTL ? 'تمت إزالة بيانات الاعتماد' : 'Credentials removed', type: 'success' });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setMessage({ text: data.error || (isRTL ? 'فشل حذف البيانات' : 'Failed to remove credentials'), type: 'error' });
       }
-    } catch {
-      // ignore
+    } catch (err: any) {
+      setMessage({ text: err?.message || (isRTL ? 'خطأ أثناء الحذف' : 'Error removing credentials'), type: 'error' });
     }
   };
 
@@ -117,16 +117,19 @@ export const UserApiKeySection: React.FC = () => {
           </div>
           <div>
             <h3 className="text-sm sm:text-base font-black text-slate-100">{isRTL ? 'إدارة مفاتيح وبيانات الاتصال (API & Gateway)' : 'API & Gateway Credentials'}</h3>
-            <p className="text-[11px] text-slate-400">{isRTL ? 'تشفير وربط بيانات التداول بحسابك الموثق' : 'Secure platform credentials bound to your verified account'}</p>
+            <p className="text-[11px] text-slate-400">{isRTL ? 'تشفير وربط بيانات الحساب الحقيقي بحسابك الموثق' : 'Secure real account credentials bound to your verified license'}</p>
           </div>
         </div>
 
-        {savedCreds && (
-          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>{isRTL ? 'بيانات معتمدة' : 'Verified'}</span>
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {isLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin text-slate-400" />}
+          {savedCreds && (
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>{isRTL ? 'بيانات معتمدة' : 'Verified'}</span>
+            </span>
+          )}
+        </div>
       </div>
 
       {message && (
@@ -147,19 +150,38 @@ export const UserApiKeySection: React.FC = () => {
               <span className="text-amber-400 font-bold">{savedCreds.sessionTokenMasked}</span>
             </div>
             <div className="flex items-center gap-3 text-[11px] text-slate-400 font-mono">
-              <span>Mode: <strong className={savedCreds.isDemo ? 'text-blue-400' : 'text-emerald-400'}>{savedCreds.isDemo ? 'DEMO' : 'REAL'}</strong></span>
+              <span>Mode: <strong className="text-emerald-400">REAL</strong></span>
               {savedCreds.accountUid && <span>UID: <strong>{savedCreds.accountUid}</strong></span>}
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleDelete}
-            className="px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>{isRTL ? 'إزالة البيانات' : 'Remove'}</span>
-          </button>
+          {confirmingDelete ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all cursor-pointer"
+              >
+                {isRTL ? 'تأكيد الحذف' : 'Confirm'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(false)}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all cursor-pointer"
+              >
+                {isRTL ? 'إلغاء' : 'Cancel'}
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmingDelete(true)}
+              className="px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>{isRTL ? 'إزالة البيانات' : 'Remove'}</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -174,7 +196,7 @@ export const UserApiKeySection: React.FC = () => {
               type={showToken ? 'text' : 'password'}
               value={platformToken}
               onChange={(e) => setPlatformToken(e.target.value)}
-              placeholder={savedCreds ? (isRTL ? 'اتركه فارغاً للاحتفاظ بالتوكن الحالي' : 'Leave empty to keep existing token') : '42["auth",{"session":"...","isDemo":1}]'}
+              placeholder={savedCreds ? (isRTL ? 'اتركه فارغاً للاحتفاظ بالتوكن الحالي' : 'Leave empty to keep existing token') : '42["auth",{"session":"...","isDemo":0}]'}
               className="w-full py-2.5 px-3 bg-slate-950 border border-slate-700 rounded-xl text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-amber-500 font-mono"
             />
             <button
@@ -200,15 +222,11 @@ export const UserApiKeySection: React.FC = () => {
           </div>
 
           <div>
-            <label className="block font-bold text-slate-300 mb-1">{isRTL ? 'نوع الحساب الافتراضي:' : 'Default Account Mode:'}</label>
-            <select
-              value={isDemo ? 'demo' : 'real'}
-              onChange={(e) => setIsDemo(e.target.value === 'demo')}
-              className="w-full py-2 px-3 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-200 font-mono"
-            >
-              <option value="demo">DEMO (حساب تجريبي)</option>
-              <option value="real">REAL (حساب حقيقي)</option>
-            </select>
+            <label className="block font-bold text-slate-300 mb-1">{isRTL ? 'نوع الحساب المعتمد:' : 'Account Mode:'}</label>
+            <div className="w-full py-2 px-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-400 font-mono font-bold flex items-center justify-between">
+              <span>{isRTL ? 'حساب حقيقي فقط (REAL)' : 'REAL ACCOUNT ONLY'}</span>
+              <Lock className="w-3.5 h-3.5 text-emerald-400" />
+            </div>
           </div>
         </div>
 

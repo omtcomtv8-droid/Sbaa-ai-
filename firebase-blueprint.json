@@ -371,6 +371,36 @@
         }
       },
       "required": ["userId", "riskPerTrade", "maxDailyLoss", "updatedAt"]
+    },
+    "UserTrade": {
+      "title": "UserTrade",
+      "description": "Persisted executed trade record owned by an authenticated user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique trade ID" },
+        "ticketId": { "type": "string", "description": "Broker ticket ID" },
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "asset": { "type": "string", "description": "Trading symbol" },
+        "accountMode": { "type": "string", "description": "REAL or DEMO" },
+        "timeframe": { "type": "number", "description": "Contract timeframe in seconds" },
+        "strategyName": { "type": "string", "description": "Strategy used" },
+        "action": { "type": "string", "description": "call or put" },
+        "amount": { "type": "number", "description": "Trade stake amount" },
+        "openTime": { "type": "number", "description": "Open UNIX timestamp" },
+        "closeTime": { "type": "number", "description": "Close UNIX timestamp" },
+        "openPrice": { "type": "number", "description": "Entry price" },
+        "entryPrice": { "type": "number", "description": "Entry price" },
+        "closePrice": { "type": "number", "description": "Exit price" },
+        "exitPrice": { "type": "number", "description": "Exit price" },
+        "profit": { "type": "number", "description": "Realized profit/loss" },
+        "payout": { "type": "number", "description": "Payout percentage" },
+        "result": { "type": "string", "description": "WIN, LOSS, DRAW, or PENDING" },
+        "durationSec": { "type": "number", "description": "Duration in seconds" },
+        "reasons": { "type": "array", "description": "Signal reason strings" },
+        "confluenceScore": { "type": "number", "description": "Confluence score" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp of last update" }
+      },
+      "required": ["id", "userId", "asset", "action", "amount", "openTime", "result", "updatedAt"]
     }
   },
   "firestore": {
@@ -405,6 +435,10 @@
     "/users/{userId}/settings/{settingId}": {
       "schema": "RiskSettings",
       "description": "User risk preferences and strategy configuration"
+    },
+    "/userTrades/{tradeId}": {
+      "schema": "UserTrade",
+      "description": "User trade history records scoped by userId"
     }
   }
 }

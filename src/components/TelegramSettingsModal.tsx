@@ -28,7 +28,9 @@ export const TelegramSettingsModal: React.FC<TelegramSettingsModalProps> = ({
   const [status, setStatus] = useState<TelegramStatus | null>(null);
   const [botToken, setBotToken] = useState('');
   const [chatId, setChatId] = useState('');
+  const [enabled, setEnabled] = useState(true);
   const [autoBroadcast, setAutoBroadcast] = useState(true);
+  const [autoBroadcastTrades, setAutoBroadcastTrades] = useState(true);
   const [minConfidence, setMinConfidence] = useState(70);
   const [password, setPassword] = useState('sbaa0000');
   const [isLoading, setIsLoading] = useState(false);
@@ -39,7 +41,9 @@ export const TelegramSettingsModal: React.FC<TelegramSettingsModalProps> = ({
       telegramService.getStatus().then((st) => {
         setStatus(st);
         if (st.chatId) setChatId(st.chatId);
+        setEnabled(st.configured ? st.enabled : true);
         setAutoBroadcast(st.autoBroadcastSignals);
+        setAutoBroadcastTrades(st.autoBroadcastTrades !== false);
         setMinConfidence(st.minConfidence || 70);
       });
     }
@@ -52,10 +56,14 @@ export const TelegramSettingsModal: React.FC<TelegramSettingsModalProps> = ({
     setIsLoading(true);
     setTestResult(null);
 
+    const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const res = await telegramService.updateConfig({
-      botToken: botToken || undefined,
-      chatId: chatId || undefined,
+      botToken: botToken.trim() || undefined,
+      chatId: chatId.trim() || undefined,
+      enabled,
       autoBroadcastSignals: autoBroadcast,
+      autoBroadcastTrades,
+      displayTimezone: browserTz,
       minConfidence,
       password: password || 'sbaa0000',
       adminToken: adminToken || undefined,
@@ -63,7 +71,7 @@ export const TelegramSettingsModal: React.FC<TelegramSettingsModalProps> = ({
 
     setIsLoading(false);
     if (res.success) {
-      setTestResult(isRTL ? '✅ تم حفظ إعدادات البوت بنجاح!' : 'Telegram settings saved!');
+      setTestResult(isRTL ? '✅ تم حفظ وتفعيل إعدادات بوت التلجرام بنجاح!' : 'Telegram settings saved & enabled!');
       telegramService.getStatus().then(setStatus);
     } else {
       setTestResult(`❌ ${res.error || 'Failed to update'}`);
@@ -135,7 +143,11 @@ export const TelegramSettingsModal: React.FC<TelegramSettingsModalProps> = ({
               type="password"
               value={botToken}
               onChange={(e) => setBotToken(e.target.value)}
-              placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ..."
+              placeholder={
+                status?.configured
+                  ? (isRTL ? 'التوكن محفوظ بالفعل (اتركه فارغاً للإبقاء عليه)' : 'Token saved (leave blank to keep current)')
+                  : '123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ...'
+              }
               className="w-full py-2 px-3 bg-slate-950 border border-slate-700 rounded-xl text-slate-200 font-mono focus:outline-none focus:border-amber-500"
             />
           </div>
@@ -153,32 +165,60 @@ export const TelegramSettingsModal: React.FC<TelegramSettingsModalProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3 pt-1">
-            <div className="flex items-center gap-2 pt-2">
+          <div className="space-y-2.5 pt-1">
+            <div className="flex items-center gap-2">
               <input
                 type="checkbox"
-                id="autoModal"
-                checked={autoBroadcast}
-                onChange={(e) => setAutoBroadcast(e.target.checked)}
-                className="w-4 h-4 rounded text-amber-500 bg-slate-950 border-slate-700 cursor-pointer"
+                id="tgEnabledModal"
+                checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)}
+                className="w-4 h-4 rounded text-emerald-500 bg-slate-950 border-slate-700 cursor-pointer"
               />
-              <label htmlFor="autoModal" className="text-slate-300 font-bold cursor-pointer">
-                {isRTL ? 'بث الإشارات آلياً' : 'Auto Broadcast'}
+              <label htmlFor="tgEnabledModal" className="text-slate-200 font-bold cursor-pointer">
+                {isRTL ? 'تفعيل بوت التلجرام للربط المباشر' : 'Enable Telegram Bot Integration'}
               </label>
             </div>
 
-            <div>
-              <label className="block font-bold text-slate-300 mb-1">
-                {isRTL ? 'الحد الأدنى للقوة (%):' : 'Min Confidence (%):'}
-              </label>
+            <div className="flex items-center gap-2">
               <input
-                type="number"
-                min="50"
-                max="95"
-                value={minConfidence}
-                onChange={(e) => setMinConfidence(Number(e.target.value))}
-                className="w-full py-1.5 px-3 bg-slate-950 border border-slate-700 rounded-xl text-slate-200 font-mono"
+                type="checkbox"
+                id="autoTradesModal"
+                checked={autoBroadcastTrades}
+                onChange={(e) => setAutoBroadcastTrades(e.target.checked)}
+                className="w-4 h-4 rounded text-emerald-500 bg-slate-950 border-slate-700 cursor-pointer"
               />
+              <label htmlFor="autoTradesModal" className="text-slate-300 font-bold cursor-pointer">
+                {isRTL ? 'إرسال صفقات التداول الآلي للبوت فوراً (الزوج، الاتجاه، وقت الدخول)' : 'Send Auto-Trader Deals to Bot'}
+              </label>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="autoModal"
+                  checked={autoBroadcast}
+                  onChange={(e) => setAutoBroadcast(e.target.checked)}
+                  className="w-4 h-4 rounded text-amber-500 bg-slate-950 border-slate-700 cursor-pointer"
+                />
+                <label htmlFor="autoModal" className="text-slate-300 font-bold cursor-pointer">
+                  {isRTL ? 'بث الإشارات آلياً' : 'Auto Broadcast Signals'}
+                </label>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-300 mb-1">
+                  {isRTL ? 'الحد الأدنى للقوة (%):' : 'Min Confidence (%):'}
+                </label>
+                <input
+                  type="number"
+                  min="50"
+                  max="95"
+                  value={minConfidence}
+                  onChange={(e) => setMinConfidence(Number(e.target.value))}
+                  className="w-full py-1.5 px-3 bg-slate-950 border border-slate-700 rounded-xl text-slate-200 font-mono"
+                />
+              </div>
             </div>
           </div>
 
