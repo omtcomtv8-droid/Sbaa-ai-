@@ -92,7 +92,7 @@ export class TelegramBotService {
       enabled: Boolean(process.env.TELEGRAM_BOT_TOKEN),
       autoBroadcastSignals: true,
       autoBroadcastTrades: true,
-      displayTimezone: process.env.TZ || '',
+      displayTimezone: 'UTC+3',
       minConfidence: 70,
       lastTestStatus: 'IDLE',
       broadcastCount: 0,
@@ -106,6 +106,10 @@ export class TelegramBotService {
         return {
           ...defaultCfg,
           ...parsed,
+          displayTimezone:
+            typeof parsed.displayTimezone === 'string' && parsed.displayTimezone.trim()
+              ? parsed.displayTimezone.trim()
+              : 'UTC+3',
           autoBroadcastTrades: parsed.autoBroadcastTrades !== undefined ? Boolean(parsed.autoBroadcastTrades) : true,
         };
       }
@@ -251,10 +255,11 @@ export class TelegramBotService {
       }
     }
 
+    const nowFormatted = this.formatExactTime(Date.now());
     const testMsg = `<b>⚡️ تجربة اتصال بوت التلجرام - SABAA QUANT</b>\n\n` +
       `✅ تم التحقق من ربط بوت التلجرام بنجاح مع غرفة توليد المفاتيح ومنصة التداول!\n` +
       brokerText +
-      `🕒 <b>التوقيت:</b> ${new Date().toLocaleString()}\n` +
+      `🕒 <b>التوقيت:</b> <code>${nowFormatted.timeStr}</code>${nowFormatted.tzSuffix} (${nowFormatted.dateStr})\n` +
       `🤖 <b>معرف البوت:</b> @${this.config.botUsername || 'SabaaTradingBot'}\n` +
       `🔗 <b>نظام التفعيل:</b> جاهز للتحقق من المفاتيح وربط الحسابات فورياً عبر API.`;
 
@@ -278,65 +283,78 @@ export class TelegramBotService {
     }
   }
 
+  private parseUtcOffsetMinutes(tz: string): number | null {
+    const clean = tz.trim().toUpperCase();
+    if (clean === 'UTC' || clean === 'GMT') return 0;
+    const match = clean.match(/^(?:UTC|GMT)\s*([+-])\s*(\d{1,2})(?::?(\d{2}))?$/);
+    if (!match) return null;
+    const sign = match[1] === '-' ? -1 : 1;
+    const hours = Number(match[2]);
+    const mins = match[3] ? Number(match[3]) : 0;
+    if (isNaN(hours) || isNaN(mins) || hours > 14 || mins >= 60) return null;
+    return sign * (hours * 60 + mins);
+  }
+
   private formatExactTime(
     timestampMs: number,
     preferredTimeZone?: string
   ): { timeStr: string; dateStr: string; tzSuffix: string } {
     const safeMs = Number.isFinite(timestampMs) && timestampMs > 0 ? timestampMs : Date.now();
-    const date = new Date(safeMs);
-    const candidateTz = (preferredTimeZone || this.config.displayTimezone || '').trim();
+    const candidateTz = (preferredTimeZone || this.config.displayTimezone || 'UTC+3').trim() || 'UTC+3';
 
-    if (candidateTz) {
-      try {
-        const timeStr = new Intl.DateTimeFormat('en-GB', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false,
-          timeZone: candidateTz,
-        }).format(date);
-        const dateStr = new Intl.DateTimeFormat('en-CA', {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          timeZone: candidateTz,
-        }).format(date);
-        return { timeStr, dateStr, tzSuffix: '' };
-      } catch {
-        // Fallback below if timezone identifier is invalid
-      }
+    const offsetMinutes = this.parseUtcOffsetMinutes(candidateTz);
+    if (offsetMinutes !== null) {
+      const shifted = new Date(safeMs + offsetMinutes * 60_000);
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const timeStr = `${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}:${pad(shifted.getUTCSeconds())}`;
+      const dateStr = `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}`;
+      const label = offsetMinutes === 0 ? 'UTC' : candidateTz.toUpperCase().replace(/\s+/g, '');
+      return { timeStr, dateStr, tzSuffix: ` (${label})` };
     }
 
-    const timeStr = new Intl.DateTimeFormat('en-GB', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-      timeZone: 'UTC',
-    }).format(date);
-    const dateStr = new Intl.DateTimeFormat('en-CA', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      timeZone: 'UTC',
-    }).format(date);
-    return { timeStr, dateStr, tzSuffix: ' (UTC)' };
+    const date = new Date(safeMs);
+    try {
+      const timeStr = new Intl.DateTimeFormat('en-GB', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+        timeZone: candidateTz,
+      }).format(date);
+      const dateStr = new Intl.DateTimeFormat('en-CA', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        timeZone: candidateTz,
+      }).format(date);
+      return { timeStr, dateStr, tzSuffix: ` (${candidateTz})` };
+    } catch {
+      // Safe deterministic fallback to UTC+3
+      const shifted = new Date(safeMs + 180 * 60_000);
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const timeStr = `${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}:${pad(shifted.getUTCSeconds())}`;
+      const dateStr = `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}`;
+      return { timeStr, dateStr, tzSuffix: ' (UTC+3)' };
+    }
   }
 
   public setDisplayTimezone(timeZone?: string): void {
     const clean = typeof timeZone === 'string' ? timeZone.trim() : '';
     if (!clean || clean === this.config.displayTimezone) return;
-    try {
-      new Intl.DateTimeFormat('en-GB', { timeZone: clean }).format(new Date());
-      this.config.displayTimezone = clean;
+    const isFixedOffset = this.parseUtcOffsetMinutes(clean) !== null;
+    if (!isFixedOffset) {
       try {
-        const p = this.getConfigFilePath();
-        fs.writeFileSync(p, JSON.stringify(this.config, null, 2), 'utf8');
+        new Intl.DateTimeFormat('en-GB', { timeZone: clean }).format(new Date());
       } catch {
-        // ignore write failure
+        return;
       }
+    }
+    this.config.displayTimezone = clean;
+    try {
+      const p = this.getConfigFilePath();
+      fs.writeFileSync(p, JSON.stringify(this.config, null, 2), 'utf8');
     } catch {
-      // ignore invalid IANA timezone
+      // ignore write failure
     }
   }
 

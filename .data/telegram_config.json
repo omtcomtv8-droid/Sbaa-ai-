@@ -5,10 +5,11 @@
   "enabled": true,
   "autoBroadcastSignals": true,
   "autoBroadcastTrades": true,
-  "displayTimezone": "",
+  "displayTimezone": "UTC+3",
   "minConfidence": 70,
   "lastTestStatus": "SUCCESS",
-  "broadcastCount": 0,
+  "broadcastCount": 12,
   "botFirstName": "POCKET OPTION Aİ SİGNAL",
-  "lastTestMessage": "Connection verified successfully!"
+  "lastTestMessage": "Connection verified successfully!",
+  "lastBroadcastAt": "2026-11-17T10:31:33.186Z"
 }

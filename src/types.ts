@@ -1020,15 +1020,17 @@ export interface Position {
 export interface ScannerItem {
   symbol: string;
   label: string;
-  currentPrice: number;
-  change24h: number;
+  currentPrice: number | null;
+  change24h: number | null;
   trend: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
-  rsi: number;
+  rsi: number | null;
   macd: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
-  macdStatus?: 'BULLISH' | 'BEARISH' | 'NEUTRAL' | string;
+  macdStatus?: 'BULLISH' | 'BEARISH' | 'NEUTRAL' | 'AWAITING_DATA' | string;
   score: number;
-  confluenceScore?: number;
+  confluenceScore?: number | null;
   signal: 'STRONG_BUY' | 'BUY' | 'WAIT' | 'SELL' | 'STRONG_SELL';
+  dataStatus?: 'LIVE' | 'AWAITING_FEED' | string;
+  dataSource?: string;
   lastUpdated: number;
 }
 

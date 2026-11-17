@@ -118,51 +118,175 @@ export class SabaaService {
     return [...this.positions];
   }
 
-  // --- MARKET SCANNER ---
-  public getScannerData(activeAssetPrice?: number): any[] {
-    const assets = [
-      { symbol: 'EURUSD_otc', label: 'EUR / USD', basePrice: 1.0854 },
-      { symbol: 'GBPUSD_otc', label: 'GBP / USD', basePrice: 1.2942 },
-      { symbol: 'USDJPY_otc', label: 'USD / JPY', basePrice: 153.25 },
-      { symbol: 'AUDUSD_otc', label: 'AUD / USD', basePrice: 0.6585 },
-      { symbol: 'BTCUSD', label: 'BTC / USD', basePrice: 94500.0 },
-      { symbol: 'ETHUSD', label: 'ETH / USD', basePrice: 2840.5 },
-      { symbol: 'XAUUSD', label: 'Gold (XAU/USD)', basePrice: 2715.4 },
-      { symbol: 'US500', label: 'S&P 500 Index', basePrice: 5980.2 },
+  private scannerSpotCache = new Map<string, { candles: Candle[]; source: string; fetchedAt: number }>();
+
+  // --- REAL MARKET SCANNER ---
+  public async getRealScannerData(params: {
+    poService: any;
+    marketDataStore: any;
+    candleBuilder: CandleBuilder;
+    strategyEngine: StrategyEngine;
+    historicalService: any;
+  }): Promise<any[]> {
+    const { poService, marketDataStore, candleBuilder, strategyEngine, historicalService } = params;
+    const now = Date.now();
+    const activeAsset = poService?.getActiveAsset?.() || 'EURUSD_otc';
+
+    const baseList: Array<{ symbol: string; label: string }> = [
+      { symbol: 'EURUSD', label: 'EUR / USD' },
+      { symbol: 'GBPUSD', label: 'GBP / USD' },
+      { symbol: 'USDJPY', label: 'USD / JPY' },
+      { symbol: 'AUDUSD', label: 'AUD / USD' },
+      { symbol: 'BTCUSD', label: 'BTC / USD' },
+      { symbol: 'ETHUSD', label: 'ETH / USD' },
     ];
 
-    const now = Date.now();
-    return assets.map((a, i) => {
-      let currentPrice = a.basePrice;
-      if (a.symbol === 'EURUSD_otc' && activeAssetPrice && activeAssetPrice > 0) {
-        currentPrice = activeAssetPrice;
-      } else {
-        // slight deterministic drift
-        const phase = Math.sin((now / 15000) + i);
-        currentPrice = Number((a.basePrice * (1 + phase * 0.0015)).toFixed(a.symbol.includes('JPY') ? 3 : a.symbol.includes('BTC') || a.symbol.includes('US500') ? 2 : 5));
-      }
+    if (activeAsset && !baseList.some((a) => a.symbol === activeAsset)) {
+      baseList.unshift({
+        symbol: activeAsset,
+        label: activeAsset.replace(/_otc$/i, ' (OTC)'),
+      });
+    }
 
-      const change24h = Number((Math.sin(i * 1.5) * 1.25).toFixed(2));
-      const rsi = Math.round(42 + Math.cos(i + now / 30000) * 26);
-      const isBullish = rsi > 52 && change24h > 0;
-      const isBearish = rsi < 48 && change24h < 0;
+    const getDecimals = (sym: string) => {
+      if (sym.includes('JPY')) return 3;
+      if (sym.includes('BTC') || sym.includes('ETH')) return 2;
+      return 5;
+    };
 
-      const score = isBullish ? 4 : isBearish ? -4 : 0;
-      const signal = score >= 4 ? 'BUY' : score <= -4 ? 'SELL' : 'WAIT';
+    const rows = await Promise.all(
+      baseList.map(async (item) => {
+        const sym = item.symbol;
+        const decimals = getDecimals(sym);
+        let candles: Candle[] = [];
+        let dataSource = 'AWAITING_FEED';
 
-      return {
-        symbol: a.symbol,
-        label: a.label,
-        currentPrice,
-        change24h,
-        trend: isBullish ? 'BULLISH' : isBearish ? 'BEARISH' : 'NEUTRAL',
-        rsi,
-        macd: isBullish ? 'BULLISH' : isBearish ? 'BEARISH' : 'NEUTRAL',
-        score,
-        signal,
-        lastUpdated: now,
-      };
-    });
+        // 1. Check live broker MarketDataStore / CandleBuilder first
+        const mdsCandles = marketDataStore?.getCandles?.(sym, 60) || [];
+        const cbCandles = candleBuilder?.getCandles?.(sym, 60) || [];
+        candles = mdsCandles.length >= cbCandles.length ? mdsCandles : cbCandles;
+
+        if (candles.length > 0) {
+          dataSource = 'BROKER_LIVE';
+        } else if (historicalService && typeof historicalService.loadHistoricalCandles === 'function') {
+          const isOtc = typeof historicalService.constructor?.isOtcAsset === 'function'
+            ? historicalService.constructor.isOtcAsset(sym)
+            : sym.toLowerCase().includes('otc');
+
+          if (!isOtc) {
+            const cached = this.scannerSpotCache.get(sym);
+            if (cached && now - cached.fetchedAt < 30_000) {
+              candles = cached.candles;
+              dataSource = cached.source;
+            } else {
+              try {
+                const loaded = await historicalService.loadHistoricalCandles(sym, 60, 60);
+                if (loaded?.candles?.length > 0) {
+                  candles = loaded.candles;
+                  dataSource = loaded.source || 'SPOT_FEED';
+                  this.scannerSpotCache.set(sym, {
+                    candles,
+                    source: dataSource,
+                    fetchedAt: now,
+                  });
+                }
+              } catch {
+                if (cached?.candles?.length) {
+                  candles = cached.candles;
+                  dataSource = cached.source;
+                }
+              }
+            }
+          }
+        }
+
+        const lastTick = candleBuilder?.getLastTick?.(sym);
+        const latestCandle = candles.length > 0 ? candles[candles.length - 1] : null;
+        const rawPrice = lastTick?.price ?? latestCandle?.close ?? null;
+        const currentPrice =
+          typeof rawPrice === 'number' && rawPrice > 0
+            ? Number(rawPrice.toFixed(decimals))
+            : null;
+
+        let change24h: number | null = null;
+        if (currentPrice !== null && candles.length >= 2) {
+          const refOpen = candles[0].open;
+          if (refOpen > 0) {
+            change24h = Number((((currentPrice - refOpen) / refOpen) * 100).toFixed(2));
+          }
+        }
+
+        const closes = candles.map((c) => c.close);
+        let rsiVal: number | null = null;
+        let macdStatus: 'BULLISH' | 'BEARISH' | 'NEUTRAL' | 'AWAITING_DATA' = 'AWAITING_DATA';
+        let trend: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = 'NEUTRAL';
+        let score = 0;
+        let confluenceScore: number | null = null;
+        let signal: 'STRONG_BUY' | 'BUY' | 'WAIT' | 'SELL' | 'STRONG_SELL' = 'WAIT';
+
+        if (closes.length >= 15) {
+          const { calculateRSI, calculateMACD } = await import('./indicators');
+          rsiVal = calculateRSI(closes, 14);
+          const macdObj = calculateMACD(closes, 12, 26, 9);
+          if (macdObj) {
+            macdStatus = macdObj.histogram > 0 ? 'BULLISH' : macdObj.histogram < 0 ? 'BEARISH' : 'NEUTRAL';
+          } else {
+            macdStatus = 'NEUTRAL';
+          }
+        }
+
+        if (candles.length >= 25 && strategyEngine) {
+          const evalResults = strategyEngine.evaluateStrategiesOnCandles(candles, sym, 60);
+          const validStrats = evalResults.filter((s) => s.dataValid !== false);
+          const upStrats = validStrats.filter((s) => s.qualified && s.signal === 'UP');
+          const downStrats = validStrats.filter((s) => s.qualified && s.signal === 'DOWN');
+
+          score = upStrats.length - downStrats.length;
+          const totalDir = upStrats.length + downStrats.length;
+
+          if (upStrats.length > downStrats.length && upStrats.length >= 3) {
+            trend = 'BULLISH';
+            const avgUp = Math.round(
+              upStrats.reduce((acc, s) => acc + (s.normalizedScore ?? s.rawScore ?? 65), 0) / upStrats.length
+            );
+            confluenceScore = Math.min(100, Math.max(0, avgUp));
+            signal = upStrats.length >= 6 && confluenceScore >= 75 ? 'STRONG_BUY' : 'BUY';
+          } else if (downStrats.length > upStrats.length && downStrats.length >= 3) {
+            trend = 'BEARISH';
+            const avgDown = Math.round(
+              downStrats.reduce((acc, s) => acc + (s.normalizedScore ?? s.rawScore ?? 65), 0) / downStrats.length
+            );
+            confluenceScore = Math.min(100, Math.max(0, avgDown));
+            signal = downStrats.length >= 6 && confluenceScore >= 75 ? 'STRONG_SELL' : 'SELL';
+          } else {
+            trend = change24h !== null && change24h > 0.05 ? 'BULLISH' : change24h !== null && change24h < -0.05 ? 'BEARISH' : 'NEUTRAL';
+            confluenceScore = validStrats.length > 0 && totalDir > 0
+              ? Math.round((Math.max(upStrats.length, downStrats.length) / Math.max(1, validStrats.length)) * 100)
+              : 0;
+            signal = 'WAIT';
+          }
+        }
+
+        return {
+          symbol: sym,
+          label: item.label,
+          currentPrice,
+          change24h,
+          trend,
+          rsi: rsiVal,
+          macd: macdStatus === 'BULLISH' || macdStatus === 'BEARISH' ? macdStatus : 'NEUTRAL',
+          macdStatus,
+          score,
+          confluenceScore,
+          signal,
+          dataStatus: currentPrice !== null ? 'LIVE' : 'AWAITING_FEED',
+          dataSource,
+          lastUpdated: lastTick?.receivedAt || (latestCandle ? latestCandle.time * 1000 : now),
+        };
+      })
+    );
+
+    return rows;
   }
 
   // --- SYSTEM HEALTH TELEMETRY ---

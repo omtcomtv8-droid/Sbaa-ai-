@@ -2201,14 +2201,30 @@ export class PocketOptionService {
       rawItem?.deal_id ||
       `deal_${Date.now()}`
     );
-    const rawOpenTs = Number(rawItem?.openTimestamp ?? rawItem?.open_timestamp ?? Math.floor(Date.now() / 1000));
-    const openTimeSec = rawOpenTs > 1e11 ? Math.floor(rawOpenTs / 1000) : rawOpenTs;
-    const rawCloseTs = Number(
-      rawItem?.closeTimestamp ??
-      rawItem?.close_timestamp ??
-      (openTimeSec + (pending?.params?.time || 60))
+    const parseBrokerTsSec = (val: any, fallbackSec: number): number => {
+      if (typeof val === 'number' && Number.isFinite(val) && val > 0) {
+        return val > 1e11 ? Math.floor(val / 1000) : Math.floor(val);
+      }
+      if (typeof val === 'string' && val.trim()) {
+        const num = Number(val.trim());
+        if (Number.isFinite(num) && num > 0) {
+          return num > 1e11 ? Math.floor(num / 1000) : Math.floor(num);
+        }
+        const normalizedStr = val.includes('T') || val.endsWith('Z') ? val.trim() : `${val.trim().replace(' ', 'T')}Z`;
+        const parsedMs = Date.parse(normalizedStr);
+        if (Number.isFinite(parsedMs) && parsedMs > 0) {
+          return Math.floor(parsedMs / 1000);
+        }
+      }
+      return fallbackSec;
+    };
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const openTimeSec = parseBrokerTsSec(rawItem?.openTimestamp ?? rawItem?.open_timestamp, nowSec);
+    const closeTimeSec = parseBrokerTsSec(
+      rawItem?.closeTimestamp ?? rawItem?.close_timestamp,
+      openTimeSec + (pending?.params?.time || 60)
     );
-    const closeTimeSec = rawCloseTs > 1e11 ? Math.floor(rawCloseTs / 1000) : rawCloseTs;
 
     const normalizedDeal = {
       id: dealId,

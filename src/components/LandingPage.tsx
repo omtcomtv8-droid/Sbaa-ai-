@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   TrendingUp,
   ShieldCheck,
@@ -16,7 +16,7 @@ import {
   Smartphone,
   Bot,
 } from 'lucide-react';
-import { DiagnosticsInfo } from '../types';
+import { DiagnosticsInfo, ScannerItem } from '../types';
 import { GatewayOnboardingCard } from './GatewayOnboardingCard';
 import { DemoPlatformActivityCard } from './DemoPlatformActivityCard';
 import { useLanguage, LanguageSwitcher } from '../i18n/LanguageContext';
@@ -74,9 +74,32 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onOpenKeyRoom,
 }) => {
   const [highlightCard, setHighlightCard] = useState(false);
+  const [liveTicker, setLiveTicker] = useState<ScannerItem[]>([]);
   const { t, tTerm, tDynamic, isRTL } = useLanguage();
   const handleTerminal = onEnterTerminal || onLaunchTerminal || (() => {});
   const handleScanner = onOpenScanner || handleTerminal;
+
+  useEffect(() => {
+    let active = true;
+    const loadScanner = async () => {
+      try {
+        const res = await fetch('/api/scanner');
+        if (!res.ok) return;
+        const rows = await res.json();
+        if (active && Array.isArray(rows)) {
+          setLiveTicker(rows.filter((r: ScannerItem) => r.currentPrice !== null).slice(0, 4));
+        }
+      } catch {
+        // Keep empty honest state if feed unavailable
+      }
+    };
+    loadScanner();
+    const timer = setInterval(loadScanner, 15000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, []);
 
   const handleTerminalGuard = () => {
     handleTerminal();
@@ -294,43 +317,56 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
           </div>
 
-          {/* Live Ticker Strip */}
+          {/* Live Ticker Strip (100% Real Prices from /api/scanner) */}
           <div className="pt-10 max-w-4xl mx-auto">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs text-right">
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
-                <div>
-                  <div className="font-bold text-slate-200">EUR / USD</div>
-                  <div className="text-[10px] text-emerald-400 font-mono">1.0854 (+0.32%)</div>
-                </div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">شراء قوي</span>
+            {liveTicker.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs text-right">
+                {liveTicker.map((item) => {
+                  const isBuy = item.signal === 'BUY' || item.signal === 'STRONG_BUY';
+                  const isSell = item.signal === 'SELL' || item.signal === 'STRONG_SELL';
+                  const change = item.change24h ?? 0;
+                  return (
+                    <div
+                      key={item.symbol}
+                      className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between"
+                    >
+                      <div>
+                        <div className="font-bold text-slate-200">{item.label}</div>
+                        <div
+                          className={`text-[10px] font-mono ${
+                            change >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                          }`}
+                        >
+                          {item.currentPrice} ({change >= 0 ? `+${change}` : change}%)
+                        </div>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                          isBuy
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                            : isSell
+                            ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                            : 'bg-slate-800 text-slate-300 border-slate-700'
+                        }`}
+                      >
+                        {tTerm(item.signal)}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
-                <div>
-                  <div className="font-bold text-slate-200">GBP / USD</div>
-                  <div className="text-[10px] text-emerald-400 font-mono">1.2942 (+0.18%)</div>
-                </div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">شراء</span>
+            ) : (
+              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-center text-xs text-slate-400">
+                {isRTL
+                  ? 'بانتظار استلام أسعار البث المباشر من مزود السوق...'
+                  : 'Awaiting live market ticker stream...'}
               </div>
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
-                <div>
-                  <div className="font-bold text-slate-200">Gold (XAU/USD)</div>
-                  <div className="text-[10px] text-amber-400 font-mono">2715.40 (+0.85%)</div>
-                </div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">ترقب كسر</span>
-              </div>
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
-                <div>
-                  <div className="font-bold text-slate-200">BTC / USD</div>
-                  <div className="text-[10px] text-emerald-400 font-mono">94,500 (+2.40%)</div>
-                </div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">صاعد</span>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </section>
 
-      {/* Terminal Preview Card Showcase */}
+      {/* Terminal Architecture Showcase (Dynamic Live Diagnostics — No Fake Static Setups) */}
       <section className="py-14 px-4 lg:px-8 max-w-6xl mx-auto">
         <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 sm:p-7 shadow-2xl space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
@@ -338,31 +374,43 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <span className="w-3 h-3 rounded-full bg-rose-500 inline-block" />
               <span className="w-3 h-3 rounded-full bg-amber-500 inline-block" />
               <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block" />
-              <span className="text-xs font-mono text-slate-400 mr-2">SABAA-TERMINAL-CORE // EURUSD_otc (60s)</span>
+              <span className="text-xs font-mono text-slate-400 mr-2">
+                SABAA-TERMINAL-CORE // {diagnostics?.activeAsset || 'EURUSD_otc'} ({diagnostics?.timeframe || 60}s)
+              </span>
             </div>
             <div className="flex items-center gap-2 text-xs font-mono">
-              <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">Confluence: 8/9 Modules (88%)</span>
-              <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">BUY SETUP CONFIRMED</span>
+              <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                26 Quantitative Modules + SBAA 100-Pt
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded border ${
+                  diagnostics?.authVerified
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                    : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                }`}
+              >
+                {diagnostics?.authVerified ? 'LIVE BROKER VERIFIED' : 'AWAITING REAL SESSION'}
+              </span>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
-              <div className="text-xs font-semibold text-amber-400 uppercase">01. فحص كتل الأوامر (Order Blocks)</div>
+              <div className="text-xs font-semibold text-amber-400 uppercase">01. كشف كتل الأوامر والسيولة (SMC)</div>
               <p className="text-xs text-slate-300 leading-relaxed">
-                رصد ارتداد صاعد مؤكد من كتلة شرائية مؤسسية غير ملموسة عند 1.0845 مع تفريغ سيولة القيعان السابقة (Liquidity Sweep).
+                فحص الشموع المغلقة الفعلية لتحديد مناطق كسح السيولة (Liquidity Sweeps) والكسور الهيكلية (BOS / CHoCH) بدون إعادة رسم.
               </p>
             </div>
             <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
-              <div className="text-xs font-semibold text-sky-400 uppercase">02. فجوة القيمة العادلة (FVG)</div>
+              <div className="text-xs font-semibold text-sky-400 uppercase">02. مصفوفة التوافق الخوارزمي (26 وحدة)</div>
               <p className="text-xs text-slate-300 leading-relaxed">
-                تكون فجوة سعرية متوازنة على الإطار الزمني الدقيق تؤكد رغبة صناع السوق في إغلاق الاختلال السعري نحو مستويات 1.0890.
+                تقييم رياضي متزامن لمؤشرات الزخم والاتجاه وبولينجر وإيشيموكو وإليوت وجان ودارفاس مع فلترة تعارض الإشارات.
               </p>
             </div>
             <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
-              <div className="text-xs font-semibold text-emerald-400 uppercase">03. إدارة المخاطر وتحديد العائد</div>
+              <div className="text-xs font-semibold text-emerald-400 uppercase">03. إدارة المخاطر وقاطع الدائرة</div>
               <p className="text-xs text-slate-300 leading-relaxed">
-                نسبة العائد إلى المخاطرة المحسوبة 1:2.4 مع وقف خسارة محكم أسفل قاع السيولة بمقدار 15 نقطة لتأمين رأس المال.
+                تحقق إلزامي من الرصيد الحقيقي، حدود الخسارة والربح اليومية، ومنع تكرار الأوامر على نفس الشمعة قبل أي تنفيذ.
               </p>
             </div>
           </div>
@@ -370,7 +418,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2 text-amber-300">
               <ShieldCheck className="w-4 h-4 shrink-0" />
-              <span><strong>مبدأ الأمان الصارم:</strong> المنصة لا تنفذ الصفقات آلياً أبداً. يتم التحليل وتقديم المعطيات للمتداول لاتخاذ قراره اليدوي.</span>
+              <span>
+                <strong>انضباط التنفيذ الحقيقي:</strong> يدعم النظام التداول اليدوي والآلي على الحساب الحقيقي فقط بعد استيفاء شروط 15 شمعة فعلية واتصال موثق.
+              </span>
             </div>
             <button
               onClick={onEnterTerminal}
@@ -455,9 +505,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center">
               <Lock className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-bold text-slate-100">تنفيذ يدوي حصري وخالٍ من الروبوتات</h3>
+            <h3 className="text-base font-bold text-slate-100">تنفيذ منضبط وبوابات أمان صارمة</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              بطاقة تنفيذ أوامر يدوي تتطلب تأكيداً صريحاً ومراجعة من المتداول. لا يقوم أي نظام في المنصة بوضع أوامر من وراء ظهرك.
+              لا يُسمح بأي أمر يدوي أو آلي قبل التحقق من توثيق الجلسة، كفاية الرصيد الحقيقي، وتطابق 15 شمعة فعلية مع منع تكرار الصفقات.
             </p>
           </div>
         </div>

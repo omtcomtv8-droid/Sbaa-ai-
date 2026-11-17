@@ -189,38 +189,11 @@ class AuthStore {
 
   public async activateCode(rawCode: string): Promise<{ success: boolean; error?: string }> {
     this.setState({ isActivating: true, errorMessage: null });
-    const clean = rawCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-
-    // Master Admin Code or sbaa0000 instant bypass
-    if (clean === 'SBAA0000' || clean === 'SABAA0000') {
-      const fakeToken = 'admin_sess_' + Math.random().toString(36).substring(2);
-      const user: UserInfo = this.state.user || {
-        uid: 'admin_root',
-        email: 'admin@sabaa.ai',
-        displayName: 'Sabaa Master Administrator',
-        role: 'admin',
-      };
-      const activation: ActivationInfo = {
-        code: 'SBAA-0000-MASTER',
-        status: 'ACTIVE',
-        durationHours: 87600,
-        durationLabel: 'Unlimited Master License (ترخيص كامل دائم)',
-        expiresAt: new Date(Date.now() + 10 * 365 * 86400 * 1000).toISOString(),
-        maxDevices: 99,
-        activeDevicesCount: 1,
-      };
-
-      safeStorage.setSessionItem('sabaa_admin_token', fakeToken);
-
-      this.setState({
-        isActivating: false,
-        authState: 'ACTIVE',
-        sessionToken: fakeToken,
-        user,
-        activation,
-        errorMessage: null,
-      });
-      return { success: true };
+    const trimmedCode = rawCode.trim();
+    if (!trimmedCode) {
+      const error = 'يرجى إدخال رمز التفعيل.';
+      this.setState({ isActivating: false, errorMessage: error });
+      return { success: false, error };
     }
 
     try {
@@ -228,45 +201,39 @@ class AuthStore {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          code: rawCode.trim(),
-          userId: this.state.user?.uid || 'guest_' + Math.random().toString(36).substring(2, 10),
-          userEmail: this.state.user?.email || 'guest@trader.io',
+          code: trimmedCode,
+          userId: this.state.user?.uid || 'user_' + (safeStorage.getLocalItem('sabaa_device_token') || Date.now()),
+          userEmail: this.state.user?.email || 'trader@sabaa.quant',
         }),
       });
 
       const data = await res.json();
-      if (!res.ok || !data.success) {
-        // Fallback for valid looking SABAA code format SABAA-XXXX-XXXX
-        if (clean.startsWith('SABAA') || clean.length >= 8) {
-          const act: ActivationInfo = {
-            code: rawCode.toUpperCase(),
-            status: 'ACTIVE',
-            durationHours: 720,
-            durationLabel: '30 Days Standard License (ترخيص 30 يوماً)',
-            expiresAt: new Date(Date.now() + 30 * 86400 * 1000).toISOString(),
-            maxDevices: 3,
-            activeDevicesCount: 1,
-          };
-          this.setState({
-            isActivating: false,
-            authState: 'ACTIVE',
-            sessionToken: 'sess_' + Math.random().toString(36).substring(2),
-            activation: act,
-          });
-          return { success: true };
-        }
-
-        const error = data.error || 'Invalid activation code.';
+      if (!res.ok || !data.success || !data.sessionToken) {
+        const error = data.error || 'رمز التفعيل غير صالح أو منتهي الصلاحية.';
         this.setState({ isActivating: false, errorMessage: error });
         return { success: false, error };
       }
 
+      if (data.adminToken) {
+        safeStorage.setSessionItem('sabaa_admin_token', data.adminToken);
+      }
+
+      const isMaster = data.role === 'admin';
+      const user: UserInfo = this.state.user || {
+        uid: isMaster ? 'admin_root' : 'trader_verified',
+        email: isMaster ? 'admin@sabaa.ai' : 'trader@sabaa.quant',
+        displayName: isMaster ? 'Sabaa Master Administrator' : 'Verified Trader',
+        role: data.role || 'trader',
+      };
+
       this.setState({
         isActivating: false,
         authState: 'ACTIVE',
-        sessionToken: data.sessionToken || 'token_' + Date.now(),
+        sessionToken: data.sessionToken,
+        deviceToken: data.deviceToken || this.state.deviceToken,
+        user,
         activation: {
-          code: rawCode.toUpperCase(),
+          code: trimmedCode.toUpperCase(),
           status: 'ACTIVE',
           durationHours: data.durationHours || 720,
           durationLabel: data.durationLabel || 'License Active',
@@ -274,31 +241,13 @@ class AuthStore {
           maxDevices: data.maxDevices || 1,
           activeDevicesCount: data.activeDevicesCount || 1,
         },
+        errorMessage: null,
       });
       return { success: true };
     } catch (err: any) {
-      // Offline fallback: allow valid SABAA code format
-      if (clean.startsWith('SABAA') || clean.length >= 8) {
-        const act: ActivationInfo = {
-          code: rawCode.toUpperCase(),
-          status: 'ACTIVE',
-          durationHours: 720,
-          durationLabel: 'Standard License Active',
-          expiresAt: new Date(Date.now() + 30 * 86400 * 1000).toISOString(),
-          maxDevices: 3,
-          activeDevicesCount: 1,
-        };
-        this.setState({
-          isActivating: false,
-          authState: 'ACTIVE',
-          sessionToken: 'sess_' + Math.random().toString(36).substring(2),
-          activation: act,
-        });
-        return { success: true };
-      }
-
-      this.setState({ isActivating: false, errorMessage: err.message });
-      return { success: false, error: err.message };
+      const error = err?.message || 'تعذر التحقق من رمز التفعيل عبر الخادم.';
+      this.setState({ isActivating: false, errorMessage: error });
+      return { success: false, error };
     }
   }
 

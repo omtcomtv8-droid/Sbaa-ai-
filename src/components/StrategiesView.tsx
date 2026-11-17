@@ -210,7 +210,7 @@ const STRATEGY_CATALOG: StrategyMeta[] = [
     id: 'multi_confluence',
     name: 'Multi-Timeframe Confluence',
     category: 'Multi-Timeframe',
-    description: 'Aggregated synthetic consensus verifying trend agreement across timeframes',
+    description: 'Aggregated quantitative consensus verifying trend agreement across timeframes',
     defaultConfigKey: 'multiConfluence',
   },
 ];
@@ -324,7 +324,7 @@ export const StrategiesView: React.FC<StrategiesViewProps> = ({
                 {t('strategiesView.title', 'Institutional Strategy Engine')}
               </h1>
               <span className="px-2 py-0.5 text-xs font-mono font-bold rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-                {t('strategiesView.badge', '21 Real Strategies')}
+                {t('strategiesView.badge', '26 Real Strategies')}
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-1 max-w-2xl">
@@ -353,7 +353,7 @@ export const StrategiesView: React.FC<StrategiesViewProps> = ({
             </button>
 
             <div className="text-[11px] font-mono text-slate-400 px-1 hidden sm:block">
-              {t('strategiesView.mode', 'Mode')}: <strong className="text-white">{selectedStrategy === 'confluence' ? t('strategiesView.consensus', 'Consensus (21)') : selectedStrategy.toUpperCase()}</strong>
+              {t('strategiesView.mode', 'Mode')}: <strong className="text-white">{selectedStrategy === 'confluence' ? t('strategiesView.consensus', 'Consensus (26)') : selectedStrategy.toUpperCase()}</strong>
             </div>
           </div>
         </div>

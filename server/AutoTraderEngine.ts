@@ -127,6 +127,8 @@ export interface AutoTraderTradeRecord {
   lifecycle: OrderLifecycleState;
   status: 'PENDING' | 'WON' | 'LOST' | 'DRAW' | 'FAILED';
   strategy: string;
+  confidence?: number;
+  reason?: string;
   rejectionReason?: string;
   durationSeconds: number;
   createdAt: number;
@@ -185,6 +187,7 @@ export class AutoTraderEngine {
     restMaxMinutes: 45,
     maxConcurrentTrades: 1,
     cooldownBetweenTradesSec: 30,
+    displayTimezone: 'UTC+3',
   };
 
   private isRunning: boolean = false;
@@ -1074,7 +1077,8 @@ export class AutoTraderEngine {
       candleTimestamp,
       (signal as any)?.id || `sig_${candleTimestamp}`,
       tradeDecision.duration,
-      tradeDecision.strategyName
+      tradeDecision.strategyName,
+      tradeDecision.confidence
     );
   }
 
@@ -1084,6 +1088,7 @@ export class AutoTraderEngine {
     duration?: number;
     strategyName?: string;
     candleTimestamp?: number;
+    confidence?: number;
   } | null {
     if ((signal as any).dataStatus === 'OFFLINE' || (signal as any).dataStatus === 'ERROR') {
       this.lastExecutionBlockedReason = 'بيانات التغذية غير متصلة حالياً؛ حظر دخول الصفقة.';
@@ -1146,6 +1151,7 @@ export class AutoTraderEngine {
             duration,
             strategyName: 'SBAA Pro Engine (استراتيجية سبع المطورة - المحرك الشامل)',
             candleTimestamp: anchorCandleTimestamp,
+            confidence: Math.round(sbaaRecord.confluenceScore),
           };
         }
       }
@@ -1167,20 +1173,22 @@ export class AutoTraderEngine {
 
           if (candidates.length > 0) {
             const best = candidates[0];
+            const bestConf = Math.round(best.normalizedScore ?? best.rawScore ?? 0);
             const action: 'call' | 'put' = best.signal === 'UP' ? 'call' : 'put';
             const candleMultiplier = (signal.expiryDurationSec && signal.timeframe && signal.expiryDurationSec > signal.timeframe) ? 2 : 1;
             const duration = currentTf * candleMultiplier;
             this.addLog(
               'ORDER',
               'info',
-              `[SBAA سبع - دمج شامل] إشارة ${action === 'call' ? 'شراء' : 'بيع'} مؤكدة عبر استراتيجية ${best.strategyName} (${best.normalizedScore ?? best.rawScore}%) داخل محرك سبع (المدة: ${duration}s)`
+              `[SBAA سبع - دمج شامل] إشارة ${action === 'call' ? 'شراء' : 'بيع'} مؤكدة عبر استراتيجية ${best.strategyName} (${bestConf}%) داخل محرك سبع (المدة: ${duration}s)`
             );
             return {
               action,
-              reason: `[SBAA سبع - المحرك الشامل]: استراتيجية ${best.strategyName} مؤهلة بنقاط ${best.normalizedScore ?? best.rawScore}% مع توافق هيكلي`,
+              reason: `[SBAA سبع - المحرك الشامل]: استراتيجية ${best.strategyName} مؤهلة بنقاط ${bestConf}% مع توافق هيكلي`,
               duration,
               strategyName: `SBAA Pro (${best.strategyName})`,
               candleTimestamp: anchorCandleTimestamp,
+              confidence: bestConf,
             };
           }
         }
@@ -1211,6 +1219,7 @@ export class AutoTraderEngine {
             duration,
             strategyName: 'توافق الاستراتيجيات (Confluence Matrix)',
             candleTimestamp: anchorCandleTimestamp,
+            confidence: typeof signal.confidence === 'number' ? Math.round(signal.confidence) : undefined,
           };
         }
         if (signal.type === 'DOWN') {
@@ -1220,6 +1229,7 @@ export class AutoTraderEngine {
             duration,
             strategyName: 'توافق الاستراتيجيات (Confluence Matrix)',
             candleTimestamp: anchorCandleTimestamp,
+            confidence: typeof signal.confidence === 'number' ? Math.round(signal.confidence) : undefined,
           };
         }
         return null;
@@ -1242,6 +1252,7 @@ export class AutoTraderEngine {
                 duration: currentTf,
                 strategyName: 'توافق الاستراتيجيات (Confluence Matrix)',
                 candleTimestamp: anchorCandleTimestamp,
+                confidence: avgConf,
               };
             }
           } else if (downStrats.length >= 3 && downStrats.length > upStrats.length) {
@@ -1253,6 +1264,7 @@ export class AutoTraderEngine {
                 duration: currentTf,
                 strategyName: 'توافق الاستراتيجيات (Confluence Matrix)',
                 candleTimestamp: anchorCandleTimestamp,
+                confidence: avgConf,
               };
             }
           }
@@ -1280,6 +1292,7 @@ export class AutoTraderEngine {
             duration,
             strategyName: 'SBAA Pro Engine (استراتيجية سبع المطورة)',
             candleTimestamp: anchorCandleTimestamp,
+            confidence: Math.round(sbaaRecord.confluenceScore),
           };
         }
       }
@@ -1302,15 +1315,17 @@ export class AutoTraderEngine {
 
         if (candidates.length > 0) {
           const best = candidates[0];
+          const bestConf = Math.round(best.normalizedScore ?? best.rawScore ?? 0);
           const action: 'call' | 'put' = best.signal === 'UP' ? 'call' : 'put';
           const candleMultiplier = (signal.expiryDurationSec && signal.timeframe && signal.expiryDurationSec > signal.timeframe) ? 2 : 1;
           const duration = currentTf * candleMultiplier;
           return {
             action,
-            reason: `[الانتقاء التلقائي]: استراتيجية ${best.strategyName} مؤهلة بنقاط ${best.normalizedScore ?? best.rawScore}%`,
+            reason: `[الانتقاء التلقائي]: استراتيجية ${best.strategyName} مؤهلة بنقاط ${bestConf}%`,
             duration,
             strategyName: best.strategyName,
             candleTimestamp: anchorCandleTimestamp,
+            confidence: bestConf,
           };
         }
       }
@@ -1328,12 +1343,15 @@ export class AutoTraderEngine {
         const rsiDown = Boolean(rsi && rsi.dataValid !== false && rsi.qualified !== false && rsi.signal === 'DOWN');
         const candleMultiplier = (signal.expiryDurationSec && signal.timeframe && signal.expiryDurationSec > signal.timeframe) ? 2 : 1;
         const duration = currentTf * candleMultiplier;
+        const macdScore = macd ? (macd.normalizedScore ?? macd.rawScore ?? macd.score ?? 0) : 0;
+        const rsiScore = rsi ? (rsi.normalizedScore ?? rsi.rawScore ?? rsi.score ?? 0) : 0;
+        const combinedConf = Math.round(Math.max(Math.abs(macdScore), Math.abs(rsiScore)));
 
         if ((macdUp || rsiUp) && !(macdDown || rsiDown)) {
-          return { action: 'call', reason: 'إشارة صعود مؤكدة من استراتيجية RSI + MACD', duration, strategyName: 'RSI + MACD', candleTimestamp: anchorCandleTimestamp };
+          return { action: 'call', reason: 'إشارة صعود مؤكدة من استراتيجية RSI + MACD', duration, strategyName: 'RSI + MACD', candleTimestamp: anchorCandleTimestamp, confidence: combinedConf };
         }
         if ((macdDown || rsiDown) && !(macdUp || rsiUp)) {
-          return { action: 'put', reason: 'إشارة هبوط مؤكدة من استراتيجية RSI + MACD', duration, strategyName: 'RSI + MACD', candleTimestamp: anchorCandleTimestamp };
+          return { action: 'put', reason: 'إشارة هبوط مؤكدة من استراتيجية RSI + MACD', duration, strategyName: 'RSI + MACD', candleTimestamp: anchorCandleTimestamp, confidence: combinedConf };
         }
         return null;
       }
@@ -1351,12 +1369,14 @@ export class AutoTraderEngine {
         const candleMultiplier = (signal.expiryDurationSec && signal.timeframe && signal.expiryDurationSec > signal.timeframe) ? 2 : 1;
         const duration = currentTf * candleMultiplier;
         const action: 'call' | 'put' = strat.signal === 'UP' ? 'call' : 'put';
+        const resolvedConf = scoreVal !== null ? Math.round(scoreVal) : Math.round(Math.abs(strat.score || 0));
         return {
           action,
-          reason: `إشارة ${action === 'call' ? 'صعود' : 'هبوط'} حقيقية من استراتيجية ${strat.strategyName} (التقييم: ${scoreVal ?? strat.score}%)`,
+          reason: `إشارة ${action === 'call' ? 'صعود' : 'هبوط'} حقيقية من استراتيجية ${strat.strategyName} (التقييم: ${resolvedConf}%)`,
           duration,
           strategyName: strat.strategyName,
           candleTimestamp: anchorCandleTimestamp,
+          confidence: resolvedConf,
         };
       }
     }
@@ -1384,7 +1404,8 @@ export class AutoTraderEngine {
     candleTimestamp: number,
     signalId: string,
     customDuration?: number,
-    strategyName?: string
+    strategyName?: string,
+    confidence?: number
   ) {
     this.isExecutingTrade = true;
     this.executionLock = true;
@@ -1462,6 +1483,8 @@ export class AutoTraderEngine {
         lifecycle: 'CREATED',
         status: 'PENDING',
         strategy: strategyName || this.config.strategyId,
+        confidence,
+        reason,
         durationSeconds: targetTime,
         createdAt: Date.now(),
         updatedAt: Date.now(),

@@ -17,6 +17,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
+import { formatTimestampInZone } from '../utils/timezoneUtils';
 
 export interface DetailedTradeRecord {
   id: string;
@@ -45,11 +46,12 @@ export interface DetailedTradeRecord {
 
 interface TradeDetailModalProps {
   trade: DetailedTradeRecord | null;
+  displayTimezone?: string;
   onClose: () => void;
 }
 
-export const TradeDetailModal: React.FC<TradeDetailModalProps> = ({ trade, onClose }) => {
-  const { isRTL, language } = useLanguage();
+export const TradeDetailModal: React.FC<TradeDetailModalProps> = ({ trade, displayTimezone = 'UTC+3', onClose }) => {
+  const { isRTL } = useLanguage();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const isCall = trade ? (trade.action.toLowerCase() === 'call' || trade.action.toLowerCase() === 'buy') : false;
@@ -61,7 +63,20 @@ export const TradeDetailModal: React.FC<TradeDetailModalProps> = ({ trade, onClo
   const entry = trade?.entryPrice ?? trade?.openPrice ?? 0;
   const exit = trade?.exitPrice ?? trade?.closePrice ?? entry;
   const digits = trade?.asset?.includes('JPY') ? 3 : 5;
-  const profitNum = trade?.profit ?? (isWin && trade ? trade.amount * ((trade.payout || 88) / 100) : isLoss && trade ? -trade.amount : 0);
+  const hasRealProfit = typeof trade?.profit === 'number';
+  const profitNum = hasRealProfit
+    ? (trade!.profit as number)
+    : isWin && trade && typeof trade.payout === 'number'
+    ? trade.amount * (trade.payout / 100)
+    : isLoss && trade
+    ? -trade.amount
+    : 0;
+  const derivedPayoutPct =
+    typeof trade?.payout === 'number'
+      ? trade.payout
+      : isWin && trade && hasRealProfit && trade.amount > 0
+      ? Math.round(((trade.profit as number) / trade.amount) * 100)
+      : null;
 
   const tfLabel = trade ? (trade.timeframe === 60 ? '1M (60s)' : trade.timeframe === 300 ? '5M (300s)' : trade.timeframe === 900 ? '15M (900s)' : `${trade.timeframe}s`) : '';
 
@@ -284,10 +299,12 @@ export const TradeDetailModal: React.FC<TradeDetailModalProps> = ({ trade, onClo
                 <span>{isRTL ? 'النتيجة المالية (PnL)' : 'Profit / PnL'}</span>
               </div>
               <div className={`font-bold text-sm ${profitNum > 0 ? 'text-emerald-400' : profitNum < 0 ? 'text-rose-400' : 'text-slate-300'}`}>
-                {profitNum >= 0 ? `+$${profitNum.toFixed(2)}` : `-$${Math.abs(profitNum).toFixed(2)}`}
+                {hasRealProfit || isLoss ? (profitNum >= 0 ? `+$${profitNum.toFixed(2)}` : `-$${Math.abs(profitNum).toFixed(2)}`) : '—'}
               </div>
               <span className="text-[10px] text-slate-500 font-sans block">
-                {isRTL ? `عائد المنصة: ${trade.payout || 88}%` : `Payout: ${trade.payout || 88}%`}
+                {derivedPayoutPct !== null
+                  ? (isRTL ? `عائد المنصة: ${derivedPayoutPct}%` : `Payout: ${derivedPayoutPct}%`)
+                  : (isRTL ? 'تسوية حقيقية من الوسيط' : 'Actual Broker Settlement')}
               </span>
             </div>
 
@@ -301,7 +318,7 @@ export const TradeDetailModal: React.FC<TradeDetailModalProps> = ({ trade, onClo
                 {entry.toFixed(digits)}
               </div>
               <span className="text-[10px] text-slate-500 font-sans block">
-                {new Date(trade.openTime * 1000).toLocaleTimeString()}
+                {formatTimestampInZone(trade.openTime * 1000, displayTimezone)} ({displayTimezone})
               </span>
             </div>
 
@@ -315,7 +332,7 @@ export const TradeDetailModal: React.FC<TradeDetailModalProps> = ({ trade, onClo
                 {exit.toFixed(digits)}
               </div>
               <span className="text-[10px] text-slate-500 font-sans block">
-                {trade.closeTime ? new Date(trade.closeTime * 1000).toLocaleTimeString() : (isPending ? 'الصفقة جارية' : '—')}
+                {trade.closeTime ? `${formatTimestampInZone(trade.closeTime * 1000, displayTimezone)} (${displayTimezone})` : (isPending ? 'الصفقة جارية' : '—')}
               </span>
             </div>
           </div>
@@ -341,17 +358,21 @@ export const TradeDetailModal: React.FC<TradeDetailModalProps> = ({ trade, onClo
               </div>
               <div className="px-4 py-2.5 flex items-center justify-between">
                 <span className="text-slate-400">{isRTL ? 'تاريخ ووقت الفتح' : 'Open Timestamp'}</span>
-                <span className="font-mono text-slate-300">{new Date(trade.openTime * 1000).toLocaleString()}</span>
+                <span className="font-mono text-slate-300">
+                  {formatTimestampInZone(trade.openTime * 1000, displayTimezone, { includeDate: true })} ({displayTimezone})
+                </span>
               </div>
               <div className="px-4 py-2.5 flex items-center justify-between">
                 <span className="text-slate-400">{isRTL ? 'تاريخ ووقت الإغلاق' : 'Close Timestamp'}</span>
                 <span className="font-mono text-slate-300">
-                  {trade.closeTime ? new Date(trade.closeTime * 1000).toLocaleString() : '—'}
+                  {trade.closeTime ? `${formatTimestampInZone(trade.closeTime * 1000, displayTimezone, { includeDate: true })} (${displayTimezone})` : '—'}
                 </span>
               </div>
               <div className="px-4 py-2.5 flex items-center justify-between">
                 <span className="text-slate-400">{isRTL ? 'نسبة التوافق والثقة' : 'Confluence Score'}</span>
-                <span className="font-mono font-bold text-emerald-400">{trade.confluenceScore || 85}%</span>
+                <span className="font-mono font-bold text-emerald-400">
+                  {typeof trade.confluenceScore === 'number' ? `${trade.confluenceScore}%` : (isRTL ? 'غير مسجل' : 'N/A')}
+                </span>
               </div>
             </div>
           </div>

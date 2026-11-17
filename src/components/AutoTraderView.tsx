@@ -29,9 +29,16 @@ import {
   XCircle,
   ExternalLink,
   Trash2,
+  MapPin,
 } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { TradeDetailModal, DetailedTradeRecord } from './TradeDetailModal';
+import {
+  TIMEZONE_OPTIONS,
+  normalizeTimezoneValue,
+  getBrowserLocationSummary,
+  formatTimestampInZone,
+} from '../utils/timezoneUtils';
 
 interface AutoTraderStatus {
   isRunning: boolean;
@@ -51,6 +58,7 @@ interface AutoTraderStatus {
     tradesBeforeRest: number;
     maxConcurrentTrades?: number;
     cooldownBetweenTradesSec?: number;
+    displayTimezone?: string;
   };
   totalTrades: number;
   winningTrades: number;
@@ -90,6 +98,8 @@ interface AutoTraderStatus {
     lifecycle?: string;
     status: 'PENDING' | 'WON' | 'LOST' | 'DRAW' | 'FAILED';
     strategy: string;
+    confidence?: number;
+    reason?: string;
     rejectionReason?: string;
   }>;
   recentLogs: Array<{
@@ -403,6 +413,8 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
   const [takeProfit, setTakeProfit] = useState<number>(40);
   const [enableMartingale, setEnableMartingale] = useState<boolean>(false);
   const [martingaleMultiplier, setMartingaleMultiplier] = useState<number>(2.0);
+  const [displayTimezone, setDisplayTimezone] = useState<string>('UTC+3');
+  const browserLoc = getBrowserLocationSummary();
 
   // Test Connection Modal
   const [showConnModal, setShowConnModal] = useState<boolean>(false);
@@ -453,6 +465,9 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
               }
               if (data.config.takeProfit) {
                 setTakeProfit(data.config.takeProfit);
+              }
+              if (data.config.displayTimezone) {
+                setDisplayTimezone(normalizeTimezoneValue(data.config.displayTimezone));
               }
             }
             if (data.config.enableMartingale !== undefined) {
@@ -539,7 +554,7 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
         isDemo: false,
         enableMartingale,
         martingaleMultiplier,
-        displayTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        displayTimezone,
       };
 
       const res = await fetch('/api/autotrader/start', {
@@ -636,7 +651,7 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
           isDemo: false,
           enableMartingale,
           martingaleMultiplier,
-          displayTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          displayTimezone,
         }),
       });
       const data = await res.json();
@@ -1285,6 +1300,49 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
                 )}
               </div>
 
+              {/* Timezone Selector (UTC +3:00 default) */}
+              <div className="pt-2 border-t border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-sky-400" />
+                    <span>{isRTL ? 'توقيت الصفقات ورسائل التلجرام' : 'Trades & Telegram Timezone'}</span>
+                  </label>
+                  <span className="text-[10px] font-mono text-sky-400 font-bold" dir="ltr">
+                    {displayTimezone}
+                  </span>
+                </div>
+                <select
+                  value={displayTimezone}
+                  onChange={(e) => {
+                    const nextTz = e.target.value;
+                    setDisplayTimezone(nextTz);
+                    fetch('/api/autotrader/save-settings', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ displayTimezone: nextTz }),
+                    }).catch(() => {});
+                  }}
+                  disabled={isRunning}
+                  dir="ltr"
+                  className="w-full px-3 py-2.5 rounded-xl bg-[#1d2332] border border-slate-700/80 text-slate-100 text-xs font-mono font-semibold focus:outline-hidden focus:border-sky-500 disabled:opacity-60 cursor-pointer"
+                >
+                  {TIMEZONE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <div
+                  dir="ltr"
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#252c3d] border border-slate-700/60 text-slate-200 text-[11px] font-medium"
+                >
+                  <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <span>
+                    Your location: {browserLoc.timeZone} {browserLoc.offsetLabel}
+                  </span>
+                </div>
+              </div>
+
               {/* Account Mode (Real Live Locked) */}
               <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
                 <div>
@@ -1441,19 +1499,23 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
                               profit: trade.profit,
                               result: trade.status === 'WON' ? 'WIN' : trade.status === 'LOST' ? 'LOSS' : trade.status === 'DRAW' ? 'DRAW' : 'PENDING',
                               durationSec: effectiveDuration,
-                              reasons: [
-                                `إشارة مؤكدة من استراتيجية ${trade.strategy || 'توافق الاستراتيجيات'}`,
-                                `فريم التنفيذ: ${effectiveDuration} ثانية`,
-                                trade.action === 'call' ? 'توافق مؤشرات الزخم والاتجاه للصعود' : 'توافق مؤشرات الزخم والاتجاه للهبوط',
-                              ],
-                              confluenceScore: 88,
+                              reasons: trade.reason
+                                ? [
+                                    trade.reason,
+                                    `فريم التنفيذ: ${effectiveDuration} ثانية`,
+                                  ]
+                                : [
+                                    `إشارة مؤكدة من استراتيجية ${trade.strategy || 'توافق الاستراتيجيات'}`,
+                                    `فريم التنفيذ: ${effectiveDuration} ثانية`,
+                                  ],
+                              confluenceScore: typeof trade.confidence === 'number' ? trade.confidence : undefined,
                             });
                           }}
                           className="hover:bg-slate-800/40 cursor-pointer transition-colors group"
                           title={isRTL ? 'اضغط لعرض تفاصيل الصفقة والشارت' : 'Click to inspect deal & trajectory chart'}
                         >
                           <td className="py-2 text-slate-400 text-[11px] flex items-center gap-1">
-                            <span>{new Date(trade.timestamp).toLocaleTimeString()}</span>
+                            <span>{formatTimestampInZone(trade.timestamp, displayTimezone)}</span>
                             <ExternalLink className="w-3 h-3 text-slate-600 group-hover:text-indigo-400 transition-colors" />
                           </td>
                           <td className="py-2 text-slate-200 font-semibold">{trade.asset}</td>
@@ -1766,7 +1828,7 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
                   }`}
                 >
                   <span className="text-[10px] text-slate-500 shrink-0">
-                    {new Date(log.timestamp).toLocaleTimeString()}
+                    {formatTimestampInZone(log.timestamp, displayTimezone)}
                   </span>
                   <span className="px-2 py-0.5 rounded bg-slate-800 text-[10px] uppercase font-bold text-slate-300 shrink-0">
                     {log.category}
@@ -1864,6 +1926,7 @@ export const AutoTraderView: React.FC<AutoTraderViewProps> = ({
       {/* Detailed Deal Inspection & Trajectory Modal (Problem 4) */}
       <TradeDetailModal
         trade={selectedTradeDetail}
+        displayTimezone={displayTimezone}
         onClose={() => setSelectedTradeDetail(null)}
       />
     </div>

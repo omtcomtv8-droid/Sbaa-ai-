@@ -102,59 +102,73 @@ export const MarketScannerView: React.FC<MarketScannerViewProps> = ({ onSelectAs
                     <div className="text-[10px] text-slate-400 font-mono">{item.symbol}</div>
                   </td>
                   <td className="py-3.5 px-4 font-bold text-slate-100 text-sm">
-                    {item.currentPrice}
+                    {item.currentPrice !== null && item.currentPrice !== undefined ? item.currentPrice : '—'}
                   </td>
                   <td className="py-3.5 px-4">
-                    <span
-                      className={`inline-flex items-center gap-0.5 font-bold ${
-                        item.change24h >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                      }`}
-                    >
-                      {item.change24h >= 0 ? (
-                        <ArrowUpRight className="w-3.5 h-3.5" />
-                      ) : (
-                        <ArrowDownRight className="w-3.5 h-3.5" />
-                      )}
-                      <span>{item.change24h >= 0 ? `+${item.change24h}` : item.change24h}%</span>
-                    </span>
+                    {item.change24h !== null && item.change24h !== undefined ? (
+                      <span
+                        className={`inline-flex items-center gap-0.5 font-bold ${
+                          item.change24h >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                        }`}
+                      >
+                        {item.change24h >= 0 ? (
+                          <ArrowUpRight className="w-3.5 h-3.5" />
+                        ) : (
+                          <ArrowDownRight className="w-3.5 h-3.5" />
+                        )}
+                        <span>{item.change24h >= 0 ? `+${item.change24h}` : item.change24h}%</span>
+                      </span>
+                    ) : (
+                      <span className="text-slate-500">—</span>
+                    )}
                   </td>
                   <td className="py-3.5 px-4">
-                    <span
-                      className={`px-2 py-0.5 rounded font-mono font-bold ${
-                        item.rsi <= 30
-                          ? 'bg-emerald-500/20 text-emerald-400'
-                          : item.rsi >= 70
-                          ? 'bg-rose-500/20 text-rose-400'
-                          : 'bg-slate-800 text-slate-300'
-                      }`}
-                    >
-                      {item.rsi}
-                    </span>
+                    {item.rsi !== null && item.rsi !== undefined ? (
+                      <span
+                        className={`px-2 py-0.5 rounded font-mono font-bold ${
+                          item.rsi <= 30
+                            ? 'bg-emerald-500/20 text-emerald-400'
+                            : item.rsi >= 70
+                            ? 'bg-rose-500/20 text-rose-400'
+                            : 'bg-slate-800 text-slate-300'
+                        }`}
+                      >
+                        {item.rsi}
+                      </span>
+                    ) : (
+                      <span className="text-slate-500">—</span>
+                    )}
                   </td>
                   <td className="py-3.5 px-4 font-sans text-xs">
-                    {tTerm(item.macdStatus)}
+                    {item.macdStatus === 'AWAITING_DATA'
+                      ? (isRTL ? 'بانتظار البث' : 'Awaiting Feed')
+                      : tTerm(item.macdStatus || item.macd)}
                   </td>
                   <td className="py-3.5 px-4">
-                    <div className="flex items-center gap-1.5 font-mono">
-                      <div className="w-12 h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                        <div
-                          className="h-full bg-amber-400 rounded-full"
-                          style={{ width: `${item.confluenceScore}%` }}
-                        />
+                    {item.confluenceScore !== null && item.confluenceScore !== undefined ? (
+                      <div className="flex items-center gap-1.5 font-mono">
+                        <div className="w-12 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                          <div
+                            className="h-full bg-amber-400 rounded-full"
+                            style={{ width: `${item.confluenceScore}%` }}
+                          />
+                        </div>
+                        <span className="font-bold text-amber-300">{item.confluenceScore}%</span>
                       </div>
-                      <span className="font-bold text-amber-300">{item.confluenceScore}%</span>
-                    </div>
+                    ) : (
+                      <span className="text-slate-500">—</span>
+                    )}
                   </td>
                   <td className="py-3.5 px-4">
-                    {item.signal === 'BUY' ? (
+                    {item.signal === 'BUY' || item.signal === 'STRONG_BUY' ? (
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                         <TrendingUp className="w-3.5 h-3.5" />
-                        <span>{tTerm('BUY')}</span>
+                        <span>{tTerm(item.signal)}</span>
                       </span>
-                    ) : item.signal === 'SELL' ? (
+                    ) : item.signal === 'SELL' || item.signal === 'STRONG_SELL' ? (
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
                         <TrendingUp className="w-3.5 h-3.5 rotate-180" />
-                        <span>{tTerm('SELL')}</span>
+                        <span>{tTerm(item.signal)}</span>
                       </span>
                     ) : (
                       <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-400 border border-slate-700">

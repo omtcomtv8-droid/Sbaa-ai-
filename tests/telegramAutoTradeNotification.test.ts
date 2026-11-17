@@ -235,12 +235,12 @@ async function runTests() {
     const savedCfg = tg.saveConfig({
       botToken: '999999:FAKE_UNIT_TEST_TOKEN',
       chatId: '6793310668',
-      displayTimezone: 'UTC',
     });
     assert.strictEqual(savedCfg.enabled, true, 'Saving botToken + chatId must auto-enable Telegram bot');
+    assert.strictEqual(savedCfg.displayTimezone, 'UTC+3', 'Default timezone must strictly be UTC+3');
 
-    // Compute known timestamp whose UTC HH:mm:ss is strictly 12:57:04
-    const exactEntryMs = Date.UTC(2026, 10, 16, 12, 57, 4);
+    // Compute known timestamp: 09:57:04 UTC == 12:57:04 (UTC+3)
+    const exactEntryMs = Date.UTC(2026, 10, 16, 9, 57, 4);
     const openRes = await tg.broadcastAutoTradeOpened({
       asset: 'GBPUSD_otc',
       action: 'call',
@@ -250,7 +250,6 @@ async function runTests() {
       openPrice: 1.2715,
       strategy: 'EMA 9/21/200 Crossover',
       ticketId: 'PO_TICKET_887766',
-      displayTimezone: 'UTC',
     });
 
     assert.strictEqual(openRes.success, true);
@@ -258,8 +257,8 @@ async function runTests() {
     const msgText = sentPayloads[0].text as string;
     assert(msgText.includes('GBPUSD_otc'), 'Message includes pair name');
     assert(msgText.includes('شراء (CALL ↑)'), 'Message includes CALL direction');
-    assert(msgText.includes('12:57:04'), `Message includes exact real entry time 12:57:04, got: ${msgText}`);
-    assert(msgText.includes('12:58:04'), 'Message includes exact expiry time 12:58:04');
+    assert(msgText.includes('12:57:04') && msgText.includes('(UTC+3)'), `Message includes exact UTC+3 entry time 12:57:04 (UTC+3), got: ${msgText}`);
+    assert(msgText.includes('12:58:04') && msgText.includes('(UTC+3)'), 'Message includes exact UTC+3 expiry time 12:58:04 (UTC+3)');
     assert(msgText.includes('#PO_TICKET_887766'), 'Message includes real ticket ID');
 
     const closeRes = await tg.broadcastAutoTradeClosed({
@@ -273,7 +272,6 @@ async function runTests() {
       closePrice: 1.2722,
       ticketId: 'PO_TICKET_887766',
       dailyPnL: 22.0,
-      displayTimezone: 'UTC',
     });
 
     assert.strictEqual(closeRes.success, true);
@@ -281,7 +279,8 @@ async function runTests() {
     assert(sentPayloads[1].text.includes('صفقة رابحة (+$22.00)'));
     assert(sentPayloads[1].text.includes('12:57:04'));
     assert(sentPayloads[1].text.includes('12:58:04'));
-    console.log('[PASS] 4. TelegramBotService auto-enables and formats real 12:57:04 entry & settlement messages');
+    assert(sentPayloads[1].text.includes('(UTC+3)'));
+    console.log('[PASS] 4. TelegramBotService defaults to UTC+3 and formats real 12:57:04 (UTC+3) entry & settlement messages');
   } finally {
     // Stop polling worker before restoring environment
     const tgInst: any = (TelegramBotService as any).instance;

@@ -612,7 +612,7 @@ export class SbaaStrategyEngine {
       const closePrice =
         currentCandles.length > 0
           ? currentCandles[currentCandles.length - 1].close
-          : triggerCandle.close + (action === 'call' ? 0.0001 : -0.0001);
+          : triggerCandle.close;
 
       const isWin = action === 'call' ? closePrice > triggerCandle.close : closePrice < triggerCandle.close;
       const isDraw = closePrice === triggerCandle.close;

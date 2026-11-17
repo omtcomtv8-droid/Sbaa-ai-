@@ -300,7 +300,7 @@ export const KeyGenerationRoomModal: React.FC<KeyGenerationRoomModalProps> = ({
       enabled: true,
       autoBroadcastSignals: telegramAutoBroadcast,
       autoBroadcastTrades: telegramAutoBroadcast,
-      displayTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      displayTimezone: 'UTC+3',
       minConfidence: telegramMinConfidence,
       password: 'sbaa0000',
       adminToken: token || undefined,

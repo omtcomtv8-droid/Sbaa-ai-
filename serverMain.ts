@@ -1180,12 +1180,23 @@ async function startServer() {
   });
 
 
-  // Market Scanner
-  app.get('/api/scanner', (req: Request, res: Response) => {
-    const activeAsset = poService.getActiveAsset();
-    const lastTick = candleBuilder.getLastTick(activeAsset);
-    const scannerData = sabaaService.getScannerData(lastTick?.price);
-    res.json(scannerData);
+  const scannerHistoricalService = new HistoricalCandleService();
+
+  // Market Scanner (100% Real Broker + Spot Feeds)
+  app.get('/api/scanner', async (req: Request, res: Response) => {
+    try {
+      const scannerData = await sabaaService.getRealScannerData({
+        poService,
+        marketDataStore,
+        candleBuilder,
+        strategyEngine,
+        historicalService: scannerHistoricalService,
+      });
+      res.json(scannerData);
+    } catch (err: any) {
+      console.error('[API] /api/scanner error:', err);
+      res.json([]);
+    }
   });
 
   // Public System Telemetry (unshadowed by /api/admin auth router)
